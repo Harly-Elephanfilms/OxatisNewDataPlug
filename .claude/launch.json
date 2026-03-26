@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "stock-app",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["/Users/harly/Projects/Oxatis Stock service/stock-app/.claude/dev.sh"],
+      "port": 3000
+    }
+  ]
+}
