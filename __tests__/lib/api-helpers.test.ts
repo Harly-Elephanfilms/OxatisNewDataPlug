@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractXml, parseOxatisError, oxatisResponse } from "@/lib/api-helpers";
+import { extractXml, parseOxatisError, oxatisResponse, sleep } from "@/lib/api-helpers";
 
 describe("extractXml", () => {
   it("extracts value from a simple tag", () => {
@@ -72,5 +72,13 @@ describe("oxatisResponse", () => {
     expect(res.status).toBe(500);
     const json = await res.json();
     expect(json.error).toBe("Oops");
+  });
+});
+
+describe("sleep", () => {
+  it("resolves after the specified delay", async () => {
+    const start = Date.now();
+    await sleep(20);
+    expect(Date.now() - start).toBeGreaterThanOrEqual(15);
   });
 });

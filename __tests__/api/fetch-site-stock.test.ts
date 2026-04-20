@@ -53,4 +53,14 @@ describe("parseSiteStockCSV", () => {
     const items = parseSiteStockCSV(csv);
     expect(items).toHaveLength(2);
   });
+
+  it("defaults missing optional fields to empty string or 0", () => {
+    const csvMissing = ["ItemSKU", "SKU-Z"].join("\n");
+    const items = parseSiteStockCSV(csvMissing);
+    expect(items).toHaveLength(1);
+    expect(items[0].oxatisId).toBe("");
+    expect(items[0].name).toBe("");
+    expect(items[0].qtyInStock).toBe(0);
+    expect(items[0].dateOfAvailability).toBe("");
+  });
 });
