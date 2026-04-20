@@ -139,6 +139,7 @@ export function useBulkActions(
     bulkExpandedNodes,
     setBulkExpandedNodes,
     bulkProgress,
+    setBulkProgress,
     bulkConfirming,
     setBulkConfirming,
     bulkDate,

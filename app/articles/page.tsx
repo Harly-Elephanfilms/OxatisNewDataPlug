@@ -2,18 +2,14 @@
 
 import React, { useState, useMemo, useCallback } from "react";
 import Link from "next/link";
-import type { Article, CategoryNode } from "@/lib/types";
-import type { CategoryAssignment } from "@/lib/oxatis-api";
+import type { CategoryNode } from "@/lib/types";
+import { useArticles } from "@/app/hooks/useArticles";
+import { useArticleFilters } from "@/app/articles/hooks/useArticleFilters";
+import { useArticleModal } from "@/app/articles/hooks/useArticleModal";
+import type { ModalTab } from "@/app/articles/hooks/useArticleModal";
+import { useBulkActions } from "@/app/articles/hooks/useBulkActions";
 import { useCredentials } from "@/app/contexts/CredentialsContext";
 import { useCategories } from "@/app/contexts/CategoriesContext";
-
-type SortField = "oxatisId" | "title" | "price" | "quantity" | "productType" | "brand";
-type SortDir = "asc" | "desc";
-type ModalTab = "infos" | "categories" | "seo";
-
-const COPIED_CATEGORIES_KEY = "oxatis_copied_categories";
-
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 function parsePrice(priceStr: string): number {
   const num = parseFloat(priceStr.replace(/[^\d.,]/g, "").replace(",", "."));
@@ -21,600 +17,86 @@ function parsePrice(priceStr: string): number {
 }
 
 export default function ArticlesPage() {
-  const [articles, setArticles] = useState<Article[]>([]);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [sortField, setSortField] = useState<SortField>("title");
-  const [sortDir, setSortDir] = useState<SortDir>("asc");
-  const [filterAvailability, setFilterAvailability] = useState<string>("all");
-  const [filterVisibility, setFilterVisibility] = useState<string>("all");
-  const [filterCategory, setFilterCategory] = useState<string>("all");
-  const [filterBrand, setFilterBrand] = useState<string>("all");
-  const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
-  const [modalTab, setModalTab] = useState<ModalTab>("infos");
 
-  // Détail produit (description longue + date de disponibilité) fetchés depuis l'API
-  const [longDescription, setLongDescription] = useState<string>("");
-  const [longDescriptionDraft, setLongDescriptionDraft] = useState<string>("");
-  const [loadingDescription, setLoadingDescription] = useState(false);
-  const [savingDescription, setSavingDescription] = useState(false);
-  const [descriptionFetched, setDescriptionFetched] = useState(false);
+  // Data + fetch
+  const { articles, setArticles, loading, error: fetchError, fetchArticles } = useArticles();
 
-  const [dateOfAvailability, setDateOfAvailability] = useState<string>("");
-  const [dateOfAvailabilityDraft, setDateOfAvailabilityDraft] = useState<string>("");
-  const [savingAvailability, setSavingAvailability] = useState(false);
+  // Filters + sorting
+  const {
+    searchTerm, setSearchTerm,
+    sortField, sortDir,
+    filterAvailability, setFilterAvailability,
+    filterVisibility, setFilterVisibility,
+    filterCategory, setFilterCategory,
+    filterBrand, setFilterBrand,
+    filteredArticles,
+    categories,
+    brands,
+    handleSort,
+  } = useArticleFilters(articles);
 
-  const [visibleDraft, setVisibleDraft] = useState<boolean>(true);
-  const [savingVisible, setSavingVisible] = useState(false);
+  // Modal state + API calls
+  const {
+    selectedArticle, setSelectedArticle,
+    modalTab, setModalTab,
+    longDescription, longDescriptionDraft, setLongDescriptionDraft,
+    loadingDescription, savingDescription, descriptionFetched,
+    dateOfAvailability, dateOfAvailabilityDraft, setDateOfAvailabilityDraft,
+    savingAvailability,
+    visibleDraft,
+    savingVisible,
+    showIfOutOfStock, showIfOutOfStockDraft, setShowIfOutOfStockDraft,
+    saleIfOutOfStock, saleIfOutOfStockDraft, setSaleIfOutOfStockDraft,
+    saleIfOutOfStockScenario, saleIfOutOfStockScenarioDraft, setSaleIfOutOfStockScenarioDraft,
+    savingOutOfStock,
+    articleCategories, setArticleCategories,
+    loadingArticleCats, savingCategories,
+    expandedNodes, confirmingSave, setConfirmingSave,
+    exportSuccess, setExportSuccess,
+    copyFlash,
+    openArticleDetail: _openArticleDetail,
+    fetchArticleCategories, fetchProductDetail,
+    saveVisible, saveAvailability, saveOutOfStock, saveLongDescription,
+    saveArticleCategories,
+    toggleCategory, toggleExpanded, copyCategories, pasteCategories,
+  } = useArticleModal(setArticles, setError, setSuccess);
 
-  // Comportement hors stock
-  const [showIfOutOfStock, setShowIfOutOfStock] = useState<boolean>(false);
-  const [showIfOutOfStockDraft, setShowIfOutOfStockDraft] = useState<boolean>(false);
-  const [saleIfOutOfStock, setSaleIfOutOfStock] = useState<boolean>(false);
-  const [saleIfOutOfStockDraft, setSaleIfOutOfStockDraft] = useState<boolean>(false);
-  const [saleIfOutOfStockScenario, setSaleIfOutOfStockScenario] = useState<number>(0);
-  const [saleIfOutOfStockScenarioDraft, setSaleIfOutOfStockScenarioDraft] = useState<number>(0);
-  const [savingOutOfStock, setSavingOutOfStock] = useState(false);
+  // Bulk actions
+  const {
+    selectedIds, setSelectedIds,
+    bulkModalOpen, setBulkModalOpen,
+    bulkAction, setBulkAction,
+    bulkSlot, setBulkSlot,
+    bulkSelectedCategory, setBulkSelectedCategory,
+    bulkExpandedNodes, setBulkExpandedNodes,
+    bulkProgress, setBulkProgress,
+    bulkConfirming, setBulkConfirming,
+    bulkDate, setBulkDate,
+    toggleSelectArticle, toggleSelectAll,
+    openBulkEdit, executeBulkUpdate,
+  } = useBulkActions(filteredArticles, setArticles, setError, setSuccess);
 
-  // Category tree (shared via context)
+  // Credentials + categories
+  const { appId, token, hasCredentials } = useCredentials();
   const { categoryTree, loading: loadingTree, fetchCategories } = useCategories();
 
-  // Article categories (per-article, local)
-  const [articleCategories, setArticleCategories] = useState<CategoryAssignment[]>([]);
-  const [loadingArticleCats, setLoadingArticleCats] = useState(false);
-  const [savingCategories, setSavingCategories] = useState(false);
-  const [exportSuccess, setExportSuccess] = useState(false);
-  const [copyFlash, setCopyFlash] = useState(false);
-  const [confirmingSave, setConfirmingSave] = useState(false);
-  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
-
-  // Bulk edit
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [bulkModalOpen, setBulkModalOpen] = useState(false);
-  const [bulkAction, setBulkAction] = useState<"add" | "clear" | "visible" | "hidden" | "availability" | "delete">("add");
-  const [bulkSlot, setBulkSlot] = useState(1);
-  const [bulkSelectedCategory, setBulkSelectedCategory] = useState<CategoryNode | null>(null);
-  const [bulkExpandedNodes, setBulkExpandedNodes] = useState<Set<string>>(new Set());
-  const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number; errors: string[] } | null>(null);
-  const [bulkConfirming, setBulkConfirming] = useState(false);
-  const [bulkDate, setBulkDate] = useState("");
-
-  // Credentials (shared via context)
-  const { appId, token, hasCredentials, serverHasCredentials, credParams } = useCredentials();
-
-  const fetchArticles = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const response = await fetch("/api/oxatis/fetch-articles");
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Erreur");
-      setArticles(data.items);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur inconnue");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchArticleCategories = async (oxatisId: string) => {
-    if (!hasCredentials) return;
-    setLoadingArticleCats(true);
-    try {
-      const qParams = serverHasCredentials
-        ? ""
-        : `appId=${encodeURIComponent(appId)}&token=${encodeURIComponent(token)}&`;
-      const response = await fetch(
-        `/api/oxatis/product-categories?${qParams}oxatisId=${oxatisId}`
-      );
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Erreur");
-      setArticleCategories(data.categories);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur chargement catégories article");
-    } finally {
-      setLoadingArticleCats(false);
-    }
-  };
-
-  const saveArticleCategories = async () => {
-    if (!selectedArticle || !hasCredentials) return;
-    setSavingCategories(true);
-    setError("");
-    try {
-      const response = await fetch("/api/oxatis/product-categories", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...credParams,
-          oxatisId: selectedArticle.oxatisId,
-          categories: articleCategories,
-        }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Erreur");
-      setSuccess(`Catégories mises à jour pour "${selectedArticle.title}"`);
-      setTimeout(() => setSuccess(""), 5000);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur mise à jour");
-    } finally {
-      setSavingCategories(false);
-    }
-  };
-
-  const fetchProductDetail = async (itemSKU: string) => {
-    if (!hasCredentials) return;
-    setLoadingDescription(true);
-    setDescriptionFetched(false);
-    try {
-      const qParams = serverHasCredentials
-        ? ""
-        : `appId=${encodeURIComponent(appId)}&token=${encodeURIComponent(token)}&`;
-      const response = await fetch(`/api/oxatis/product-detail?${qParams}itemSKU=${encodeURIComponent(itemSKU)}`);
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Erreur");
-      const desc = data.descriptionLong || "";
-      setLongDescription(desc);
-      setLongDescriptionDraft(desc);
-      const date = data.dateOfAvailability || "";
-      setDateOfAvailability(date);
-      setDateOfAvailabilityDraft(date);
-      const show = !!data.showIfOutOfStock;
-      setShowIfOutOfStock(show);
-      setShowIfOutOfStockDraft(show);
-      const sale = !!data.saleIfOutOfStock;
-      setSaleIfOutOfStock(sale);
-      setSaleIfOutOfStockDraft(sale);
-      const scenario = data.saleIfOutOfStockScenario ?? 0;
-      setSaleIfOutOfStockScenario(scenario);
-      setSaleIfOutOfStockScenarioDraft(scenario);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur chargement détail produit");
-    } finally {
-      setLoadingDescription(false);
-      setDescriptionFetched(true);
-    }
-  };
-
-  const saveVisible = async (newValue: boolean) => {
-    if (!selectedArticle || !hasCredentials) return;
-    setSavingVisible(true);
-    setError("");
-    try {
-      const response = await fetch("/api/oxatis/update-visibility", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...credParams,
-          itemSKU: selectedArticle.itemSKU,
-          visible: newValue,
-        }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Erreur");
-      setVisibleDraft(newValue);
-      // Mettre à jour le tableau en temps réel
-      setArticles((prev) =>
-        prev.map((a) => a.oxatisId === selectedArticle.oxatisId ? { ...a, visible: newValue } : a)
-      );
-      setSuccess(`Article "${selectedArticle.title}" ${newValue ? "rendu visible" : "masqué"} sur le site`);
-      setTimeout(() => setSuccess(""), 5000);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur mise à jour visibilité");
-      setVisibleDraft(!newValue); // rollback
-    } finally {
-      setSavingVisible(false);
-    }
-  };
-
-  const saveAvailability = async () => {
-    if (!selectedArticle || !hasCredentials) return;
-    setSavingAvailability(true);
-    setError("");
-    try {
-      const response = await fetch("/api/oxatis/update-availability", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...credParams,
-          itemSKU: selectedArticle.itemSKU,
-          dateOfAvailability: dateOfAvailabilityDraft,
-        }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Erreur");
-      setDateOfAvailability(dateOfAvailabilityDraft);
-      setSuccess(`Date de disponibilité mise à jour pour "${selectedArticle.title}"`);
-      setTimeout(() => setSuccess(""), 5000);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur mise à jour disponibilité");
-    } finally {
-      setSavingAvailability(false);
-    }
-  };
-
-  const saveOutOfStock = async () => {
-    if (!selectedArticle || !hasCredentials) return;
-    setSavingOutOfStock(true);
-    setError("");
-    try {
-      const response = await fetch("/api/oxatis/update-out-of-stock", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...credParams,
-          itemSKU: selectedArticle.itemSKU,
-          showIfOutOfStock: showIfOutOfStockDraft,
-          saleIfOutOfStock: saleIfOutOfStockDraft,
-          saleIfOutOfStockScenario: saleIfOutOfStockScenarioDraft,
-        }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Erreur");
-      setShowIfOutOfStock(showIfOutOfStockDraft);
-      setSaleIfOutOfStock(saleIfOutOfStockDraft);
-      setSaleIfOutOfStockScenario(saleIfOutOfStockScenarioDraft);
-      setSuccess(`Comportement hors stock mis à jour pour "${selectedArticle.title}"`);
-      setTimeout(() => setSuccess(""), 5000);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur mise à jour disponibilité");
-    } finally {
-      setSavingOutOfStock(false);
-    }
-  };
-
-  const saveLongDescription = async () => {
-    if (!selectedArticle || !hasCredentials) return;
-    setSavingDescription(true);
-    setError("");
-    try {
-      const response = await fetch("/api/oxatis/update-description", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...credParams,
-          itemSKU: selectedArticle.itemSKU,
-          descriptionLong: longDescriptionDraft,
-        }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Erreur");
-      setLongDescription(longDescriptionDraft);
-      setSuccess(`Description longue mise à jour pour "${selectedArticle.title}"`);
-      setTimeout(() => setSuccess(""), 5000);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur mise à jour description");
-    } finally {
-      setSavingDescription(false);
-    }
-  };
-
-  const openArticleDetail = (article: Article) => {
-    setSelectedArticle(article);
-    setArticleCategories([]);
-    setModalTab("infos");
-    setConfirmingSave(false);
-    setLongDescription("");
-    setLongDescriptionDraft("");
-    setDateOfAvailability("");
-    setDateOfAvailabilityDraft("");
-    setDescriptionFetched(false);
-    setVisibleDraft(article.visible);
-    setShowIfOutOfStock(false);
-    setShowIfOutOfStockDraft(false);
-    setSaleIfOutOfStock(false);
-    setSaleIfOutOfStockDraft(false);
-    setSaleIfOutOfStockScenario(0);
-    setSaleIfOutOfStockScenarioDraft(0);
-    if (hasCredentials) {
-      fetchArticleCategories(article.oxatisId);
-      fetchProductDetail(article.itemSKU);
-      if (categoryTree.length === 0) fetchCategories(appId, token);
-    }
-  };
-
-  const toggleCategory = (node: CategoryNode) => {
-    const exists = articleCategories.some((c) => c.oxId === node.oxId);
-    if (exists) {
-      setArticleCategories(articleCategories.filter((c) => c.oxId !== node.oxId));
-    } else {
-      if (articleCategories.length >= 10) {
-        setError("Maximum 10 catégories par article");
-        return;
-      }
-      const usedSlots = new Set(articleCategories.map((c) => c.slot));
-      let nextSlot = 1;
-      while (usedSlots.has(nextSlot)) nextSlot++;
-      setArticleCategories([
-        ...articleCategories,
-        { oxId: node.oxId, name: node.name, parentOxId: node.parentOxId, slot: nextSlot },
-      ]);
-    }
-  };
-
-  const toggleExpanded = (oxId: string) => {
-    setExpandedNodes((prev) => {
-      const next = new Set(prev);
-      if (next.has(oxId)) next.delete(oxId);
-      else next.add(oxId);
-      return next;
-    });
-  };
-
-  const copyCategories = () => {
-    try {
-      localStorage.setItem(COPIED_CATEGORIES_KEY, JSON.stringify(articleCategories));
-      setCopyFlash(true);
-      setTimeout(() => setCopyFlash(false), 1800);
-    } catch { /* ignore */ }
-  };
-
-  const pasteCategories = () => {
-    try {
-      const saved = localStorage.getItem(COPIED_CATEGORIES_KEY);
-      if (saved) {
-        const parsed: CategoryAssignment[] = JSON.parse(saved);
-        setArticleCategories(parsed);
-      }
-    } catch { /* ignore */ }
-  };
-
-  const toggleSelectArticle = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const toggleSelectAll = () => {
-    if (selectedIds.size === filteredArticles.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(filteredArticles.map((a) => a.oxatisId)));
-    }
-  };
-
-  const openBulkEdit = () => {
-    setBulkModalOpen(true);
-    setBulkProgress(null);
-    setBulkConfirming(false);
-    setBulkSelectedCategory(null);
-    setBulkExpandedNodes(new Set());
-    if (categoryTree.length === 0 && hasCredentials) fetchCategories(appId, token);
-  };
-
-  const executeBulkUpdate = async () => {
-    setBulkConfirming(false);
-    const ids = Array.from(selectedIds);
-    setBulkProgress({ current: 0, total: ids.length, errors: [] });
-    const errors: string[] = [];
-    const succeeded = new Set<string>();
-    const creds = credParams;
-
-    for (let i = 0; i < ids.length; i++) {
-      const id = ids[i];
-      try {
-        let url = "/api/oxatis/update-slot";
-        let body: Record<string, unknown> = {
-          ...creds,
-          oxatisId: id,
-          slot: bulkSlot,
-          category: bulkAction === "add" && bulkSelectedCategory
-            ? { oxId: bulkSelectedCategory.oxId, name: bulkSelectedCategory.name, parentOxId: bulkSelectedCategory.parentOxId, slot: bulkSlot }
-            : null,
-        };
-
-        if (bulkAction === "visible" || bulkAction === "hidden") {
-          url = "/api/oxatis/update-visibility";
-          body = { ...creds, itemSKU: id, visible: bulkAction === "visible" };
-        } else if (bulkAction === "availability") {
-          url = "/api/oxatis/update-availability";
-          body = { ...creds, itemSKU: id, dateOfAvailability: bulkDate };
-        } else if (bulkAction === "delete") {
-          url = "/api/oxatis/delete-product";
-          body = { ...creds, oxatisId: id };
+  // Wrapper: open article detail and trigger side-effects
+  const openArticleDetail = useCallback(
+    (article: Parameters<typeof _openArticleDetail>[0]) => {
+      _openArticleDetail(article, () => {
+        if (hasCredentials) {
+          fetchArticleCategories(article.oxatisId);
+          fetchProductDetail(article.itemSKU);
+          if (categoryTree.length === 0) fetchCategories(appId, token);
         }
-
-        const response = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        if (!response.ok) {
-          const data = await response.json();
-          errors.push(`${id}: ${data.error || "Erreur"}`);
-        } else {
-          succeeded.add(id);
-        }
-      } catch {
-        errors.push(`${id}: Erreur réseau`);
-      }
-      setBulkProgress({ current: i + 1, total: ids.length, errors: [...errors] });
-      if (i + 1 < ids.length) await sleep(200);
-    }
-
-    // Mettre à jour le tableau local pour les articles qui ont réussi
-    if (succeeded.size > 0) {
-      if (bulkAction === "visible" || bulkAction === "hidden") {
-        const newVisible = bulkAction === "visible";
-        setArticles((prev) =>
-          prev.map((a) => succeeded.has(a.oxatisId) ? { ...a, visible: newVisible } : a)
-        );
-      } else if (bulkAction === "delete") {
-        setArticles((prev) => prev.filter((a) => !succeeded.has(a.oxatisId)));
-        setSelectedIds((prev) => {
-          const next = new Set(prev);
-          succeeded.forEach((id) => next.delete(id));
-          return next;
-        });
-      }
-      // Pour les slots et la disponibilité, pas de champ local à mettre à jour directement
-    }
-  };
-
-  const renderBulkCategoryTree = (nodes: CategoryNode[], depth: number = 0): React.ReactNode => {
-    return nodes.map((node) => {
-      const isSelected = bulkSelectedCategory?.oxId === node.oxId;
-      const hasChildren = node.children.length > 0;
-      const isExpanded = bulkExpandedNodes.has(node.oxId);
-      return (
-        <div key={node.oxId}>
-          <div
-            className="flex items-center gap-2 py-1.5 rounded-md transition-colors cursor-pointer"
-            style={{
-              paddingLeft: `${depth * 16 + 8}px`,
-              paddingRight: "8px",
-              background: isSelected ? "var(--primary-light)" : undefined,
-            }}
-            onMouseEnter={(e) => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = "var(--subtle)"; }}
-            onMouseLeave={(e) => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = ""; }}
-            onClick={() => setBulkSelectedCategory(node)}
-          >
-            {hasChildren ? (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setBulkExpandedNodes((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(node.oxId)) next.delete(node.oxId);
-                    else next.add(node.oxId);
-                    return next;
-                  });
-                }}
-                className="w-5 h-5 flex items-center justify-center flex-shrink-0"
-                style={{ color: "var(--muted)" }}
-              >
-                <svg className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
-            ) : (
-              <span className="w-5 flex-shrink-0" />
-            )}
-            <div
-              className="w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center"
-              style={{ borderColor: isSelected ? "var(--primary)" : "var(--border)", background: isSelected ? "var(--primary)" : "#fff" }}
-            >
-              {isSelected && <div className="w-2 h-2 rounded-full bg-white" />}
-            </div>
-            <span className="text-sm select-none" style={{ fontWeight: isSelected ? 500 : 400, color: isSelected ? "#3730a3" : "#374151" }}>
-              {node.name}
-            </span>
-          </div>
-          {hasChildren && isExpanded && (
-            <div style={{ borderLeft: "2px solid var(--border)", marginLeft: `${depth * 16 + 20}px` }}>
-              <div style={{ marginLeft: "-2px" }}>
-                {renderBulkCategoryTree(node.children, depth + 1)}
-              </div>
-            </div>
-          )}
-        </div>
-      );
-    });
-  };
-
-  // Unique categories for filter
-  const categories = useMemo(() => {
-    const cats = new Set<string>();
-    for (const a of articles) {
-      if (a.productType) {
-        for (const catPath of a.productType.split("|")) {
-          const root = catPath.trim().split(">")[0].trim();
-          if (root) cats.add(root);
-        }
-      }
-    }
-    return Array.from(cats).sort();
-  }, [articles]);
-
-  // Unique brands for filter
-  const brands = useMemo(() => {
-    const set = new Set<string>();
-    for (const a of articles) {
-      if (a.brand) set.add(a.brand);
-    }
-    return Array.from(set).sort();
-  }, [articles]);
-
-  // Stats
-  const stats = useMemo(() => {
-    const inStock = articles.filter((a) => a.availability === "in stock").length;
-    const outOfStock = articles.filter((a) => a.availability !== "in stock").length;
-    const hidden = articles.filter((a) => !a.visible).length;
-    const totalValue = articles.reduce((sum, a) => sum + parsePrice(a.price) * Math.max(0, a.quantity), 0);
-    return { total: articles.length, inStock, outOfStock, hidden, totalValue };
-  }, [articles]);
-
-  // Filtered and sorted
-  const filteredArticles = useMemo(() => {
-    let items = [...articles];
-
-    if (filterAvailability !== "all") {
-      items = items.filter((a) =>
-        filterAvailability === "in_stock"
-          ? a.availability === "in stock"
-          : a.availability !== "in stock"
-      );
-    }
-
-    if (filterVisibility !== "all") {
-      items = items.filter((a) =>
-        filterVisibility === "visible" ? a.visible : !a.visible
-      );
-    }
-
-    if (filterCategory === "__none__") {
-      items = items.filter((a) => !a.productType || !a.productType.trim());
-    } else if (filterCategory !== "all") {
-      items = items.filter((a) => {
-        const roots = a.productType.split("|").map((c) => c.trim().split(">")[0].trim());
-        return roots.includes(filterCategory);
       });
-    }
+    },
+    [_openArticleDetail, hasCredentials, fetchArticleCategories, fetchProductDetail, categoryTree.length, fetchCategories, appId, token]
+  );
 
-    if (filterBrand !== "all") {
-      items = items.filter((a) => a.brand === filterBrand);
-    }
-
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      items = items.filter(
-        (a) =>
-          a.title.toLowerCase().includes(term) ||
-          a.oxatisId.includes(term) ||
-          a.itemSKU.toLowerCase().includes(term) ||
-          a.ean.includes(term) ||
-          a.brand.toLowerCase().includes(term) ||
-          a.productType.toLowerCase().includes(term)
-      );
-    }
-
-    items.sort((a, b) => {
-      let valA: string | number;
-      let valB: string | number;
-
-      if (sortField === "price") {
-        valA = parsePrice(a.price);
-        valB = parsePrice(b.price);
-      } else if (sortField === "quantity") {
-        valA = a.quantity;
-        valB = b.quantity;
-      } else {
-        valA = (a[sortField] as string).toLowerCase();
-        valB = (b[sortField] as string).toLowerCase();
-      }
-
-      if (valA < valB) return sortDir === "asc" ? -1 : 1;
-      if (valA > valB) return sortDir === "asc" ? 1 : -1;
-      return 0;
-    });
-
-    return items;
-  }, [articles, filterAvailability, filterVisibility, filterCategory, filterBrand, searchTerm, sortField, sortDir]);
+  const displayError = error || fetchError;
 
   const exportCsv = () => {
     setExportSuccess(false);
@@ -644,18 +126,6 @@ export default function ArticlesPage() {
     setExportSuccess(true);
     setTimeout(() => setExportSuccess(false), 2000);
   };
-
-  const handleSort = useCallback(
-    (field: SortField) => {
-      if (sortField === field) {
-        setSortDir(sortDir === "asc" ? "desc" : "asc");
-      } else {
-        setSortField(field);
-        setSortDir(field === "quantity" || field === "price" ? "desc" : "asc");
-      }
-    },
-    [sortField, sortDir]
-  );
 
   const stripHtml = (html: string) => {
     return html.replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
@@ -744,7 +214,75 @@ export default function ArticlesPage() {
     });
   };
 
-  // Computed margin for selected article
+  const renderBulkCategoryTree = (nodes: CategoryNode[], depth: number = 0): React.ReactNode => {
+    return nodes.map((node) => {
+      const isSelected = bulkSelectedCategory?.oxId === node.oxId;
+      const hasChildren = node.children.length > 0;
+      const isExpanded = bulkExpandedNodes.has(node.oxId);
+      return (
+        <div key={node.oxId}>
+          <div
+            className="flex items-center gap-2 py-1.5 rounded-md transition-colors cursor-pointer"
+            style={{
+              paddingLeft: `${depth * 16 + 8}px`,
+              paddingRight: "8px",
+              background: isSelected ? "var(--primary-light)" : undefined,
+            }}
+            onMouseEnter={(e) => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = "var(--subtle)"; }}
+            onMouseLeave={(e) => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = ""; }}
+            onClick={() => setBulkSelectedCategory(node)}
+          >
+            {hasChildren ? (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setBulkExpandedNodes((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(node.oxId)) next.delete(node.oxId);
+                    else next.add(node.oxId);
+                    return next;
+                  });
+                }}
+                className="w-5 h-5 flex items-center justify-center flex-shrink-0"
+                style={{ color: "var(--muted)" }}
+              >
+                <svg className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            ) : (
+              <span className="w-5 flex-shrink-0" />
+            )}
+            <div
+              className="w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center"
+              style={{ borderColor: isSelected ? "var(--primary)" : "var(--border)", background: isSelected ? "var(--primary)" : "#fff" }}
+            >
+              {isSelected && <div className="w-2 h-2 rounded-full bg-white" />}
+            </div>
+            <span className="text-sm select-none" style={{ fontWeight: isSelected ? 500 : 400, color: isSelected ? "#3730a3" : "#374151" }}>
+              {node.name}
+            </span>
+          </div>
+          {hasChildren && isExpanded && (
+            <div style={{ borderLeft: "2px solid var(--border)", marginLeft: `${depth * 16 + 20}px` }}>
+              <div style={{ marginLeft: "-2px" }}>
+                {renderBulkCategoryTree(node.children, depth + 1)}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    });
+  };
+
+  const stats = useMemo(() => {
+    const inStock = articles.filter((a) => a.availability === "in stock").length;
+    const outOfStock = articles.filter((a) => a.availability !== "in stock").length;
+    const hidden = articles.filter((a) => !a.visible).length;
+    const totalValue = articles.reduce((sum, a) => sum + parsePrice(a.price) * Math.max(0, a.quantity), 0);
+    return { total: articles.length, inStock, outOfStock, hidden, totalValue };
+  }, [articles]);
+
   const margin = useMemo(() => {
     if (!selectedArticle) return null;
     const ht = parseFloat(selectedArticle.priceHT);
@@ -766,9 +304,9 @@ export default function ArticlesPage() {
       </div>
 
       {/* Alerts */}
-      {error && (
+      {displayError && (
         <div className="mx-8 mt-4 alert alert-error justify-between items-start">
-          <span className="whitespace-pre-wrap flex-1">{error}</span>
+          <span className="whitespace-pre-wrap flex-1">{displayError}</span>
           <button onClick={() => setError("")} className="btn btn-ghost btn-sm ml-2 text-lg leading-none px-2 py-0">×</button>
         </div>
       )}
