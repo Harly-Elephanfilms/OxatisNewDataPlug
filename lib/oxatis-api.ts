@@ -135,7 +135,7 @@ export interface CategoryAssignment {
   slot: number; // real Oxatis slot number (1–10)
 }
 
-function escapeXml(str: string): string {
+export function escapeXml(str: string): string {
   return str
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
