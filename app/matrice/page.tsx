@@ -1,135 +1,37 @@
 "use client";
 
-import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import type { CategoryNode } from "@/lib/types";
 import { useCredentials } from "@/app/contexts/CredentialsContext";
 import { useCategories } from "@/app/contexts/CategoriesContext";
-
-const DEFAULT_CAT_KEY = "oxatis_matrice_default_cat";
-const UPDATE_FIELDS_KEY = "oxatis_matrice_update_fields";
-
-type DefaultCategory = { oxId: string; name: string; parentOxId: string };
-type UpdateFields = { description: boolean; dateDispo: boolean; nom: boolean; prix: boolean };
-
-function loadDefaultCategory(): DefaultCategory | null {
-  try {
-    const s = localStorage.getItem(DEFAULT_CAT_KEY);
-    return s ? JSON.parse(s) : null;
-  } catch { return null; }
-}
-
-function loadUpdateFields(): UpdateFields {
-  try {
-    const s = localStorage.getItem(UPDATE_FIELDS_KEY);
-    return s ? JSON.parse(s) : { description: true, dateDispo: true, nom: false, prix: false };
-  } catch { return { description: true, dateDispo: true, nom: false, prix: false }; }
-}
-
-interface MatriceArticle {
-  ean: string;
-  itemSKU: string;
-  langue: string;
-  nom: string;
-  prixTTC: number;
-  tva: number;
-  categories: string[];          // noms bruts des catégories (cols 7-11)
-  description: string;           // description courte
-  descriptionLongue: string;     // HTML complet, préfixé <!--#WYSIWYG#-->
-  metaTitle: string;
-  metaDescription: string;
-  urlCanonique: string;
-  afficherStock: string;
-  montrerSiIndispo: string;
-  causeIndispo: string;
-  imageZoom1: string;
-  imageMain: string;
-  imageVignette: string;
-  dateDispo: string;             // YYYY-MM-DD ou ""
-  afficherDelai: string;
-  isNew: boolean;
-  oxatisId: string | null;
-}
-
-interface ProgressState {
-  current: number;
-  total: number;
-  errors: string[];
-  label: string;
-}
-
-interface ConflictItem {
-  matrice: MatriceArticle;
-  oxatis: {
-    name: string;
-    description: string;
-    descriptionLong: string;
-    dateOfAvailability: string;
-    oxatisId: string;
-  };
-}
-
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-
-function formatDate(dateStr: string): string {
-  if (!dateStr) return "—";
-  const [y, m, d] = dateStr.split("-");
-  return `${d}/${m}/${y}`;
-}
-
-function str(v: unknown): string {
-  return v == null ? "" : String(v).trim();
-}
+import { useMatriceFile } from "@/app/matrice/hooks/useMatriceFile";
+import { useConflictDetection } from "@/app/matrice/hooks/useConflictDetection";
+import { useMatriceOperations } from "@/app/matrice/hooks/useMatriceOperations";
+import { formatDate } from "@/app/matrice/types";
 
 export default function MatricePage() {
-  const [articles, setArticles] = useState<MatriceArticle[]>([]);
-  const [parsing, setParsing] = useState(false);
-  const [parseError, setParseError] = useState("");
-  const [fileName, setFileName] = useState("");
-  const [isDragging, setIsDragging] = useState(false);
+  const { appId, token, hasCredentials } = useCredentials();
+  const { categoryTree, loading: loadingTree, fetchCategories } = useCategories();
+
+  const { articles, parsing, parseError, setParseError, fileName, isDragging,
+          parseFile, reset, onDrop, onDragOver, onDragLeave } =
+    useMatriceFile((aid, tok) => fetchCategories(aid, tok));
+
+  const { verifying, verifyProgress, conflicts, pendingNew, conflictModalOpen,
+          setConflictModalOpen, checkConflicts } = useConflictDetection();
+
+  const { progress, progressModalOpen, updateFields, updateModalOpen, setUpdateModalOpen,
+          defaultCategory, setDefaultCategoryPersisted, setUpdateFieldsPersisted,
+          closeProgress, executeCreate, executeUpdate } = useMatriceOperations();
 
   const [filter, setFilter] = useState<"all" | "new" | "existing">("all");
   const [search, setSearch] = useState("");
   const [selectedEans, setSelectedEans] = useState<Set<string>>(new Set());
-  const [preview, setPreview] = useState<MatriceArticle | null>(null);
-
-  const [progress, setProgress] = useState<ProgressState | null>(null);
-  const [progressModalOpen, setProgressModalOpen] = useState(false);
-
-  const [verifying, setVerifying] = useState(false);
-  const [verifyProgress, setVerifyProgress] = useState({ current: 0, total: 0 });
-  const [conflicts, setConflicts] = useState<ConflictItem[]>([]);
-  const [pendingNew, setPendingNew] = useState<MatriceArticle[]>([]);
-  const [conflictModalOpen, setConflictModalOpen] = useState(false);
-
-  // Credentials & categories (shared via context)
-  const { appId, token, hasCredentials, serverHasCredentials, credParams } = useCredentials();
-  const { categoryTree, loading: loadingTree, fetchCategories } = useCategories();
-
-  const [defaultCategory, setDefaultCategory] = useState<DefaultCategory | null>(null);
+  const [preview, setPreview] = useState<(typeof articles)[0] | null>(null);
   const [catSearch, setCatSearch] = useState("");
-
-  const [updateFields, setUpdateFields] = useState<UpdateFields>({ description: true, dateDispo: true, nom: false, prix: false });
-  const [updateModalOpen, setUpdateModalOpen] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    setDefaultCategory(loadDefaultCategory());
-    setUpdateFields(loadUpdateFields());
-  }, []);
-
-  const setDefaultCategoryPersisted = (cat: DefaultCategory | null) => {
-    setDefaultCategory(cat);
-    if (cat) localStorage.setItem(DEFAULT_CAT_KEY, JSON.stringify(cat));
-    else localStorage.removeItem(DEFAULT_CAT_KEY);
-  };
-
-  const setUpdateFieldsPersisted = (fields: UpdateFields) => {
-    setUpdateFields(fields);
-    localStorage.setItem(UPDATE_FIELDS_KEY, JSON.stringify(fields));
-  };
-
-  // Aplatit l'arbre en liste avec chemin complet (ex: "Cinéma > Action")
   const flatCategories = useMemo(() => {
     const result: { oxId: string; name: string; parentOxId: string; path: string }[] = [];
     function walk(nodes: CategoryNode[], prefix: string) {
@@ -146,149 +48,6 @@ export default function MatricePage() {
   const filteredCats = catSearch
     ? flatCategories.filter((c) => c.path.toLowerCase().includes(catSearch.toLowerCase()))
     : flatCategories;
-
-  // ── Parsing ──────────────────────────────────────────────────────────────
-
-  const parseFile = useCallback(async (file: File) => {
-    if (!file.name.match(/\.(xlsx|xls)$/i)) {
-      setParseError("Fichier non reconnu. Veuillez importer un fichier Excel (.xlsx).");
-      return;
-    }
-    setParsing(true);
-    setParseError("");
-    setArticles([]);
-    setSelectedEans(new Set());
-    setFilter("all");
-    setSearch("");
-
-    try {
-      const XLSX = await import("xlsx");
-      const buffer = await file.arrayBuffer();
-      const wb = XLSX.read(buffer, { type: "array", cellDates: true });
-
-      // ── Feuille Articles → map EAN → { oxatisId } (Actifs seulement) ──
-      const aSheet = wb.Sheets["Articles"];
-      if (!aSheet) throw new Error("Feuille 'Articles' introuvable dans le fichier.");
-      const aRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(aSheet, { defval: null });
-
-      const articleMap = new Map<string, { oxatisId: string | null }>();
-
-      // Détecter les noms de colonnes de façon flexible (insensible à la casse et aux espaces)
-      const normalize = (s: string) => s.toLowerCase().replace(/[\s_\-]/g, "");
-      const firstRow = aRows[0] ?? {};
-      const colKeys = Object.keys(firstRow);
-      const findCol = (...variants: string[]) =>
-        colKeys.find((k) => variants.includes(normalize(k))) ?? null;
-
-      const eanKey = findCol("ean") ?? "EAN";
-      const codeEtatKey = findCol("codeetat", "etat", "state") ?? "Code Etat";
-      const oxatisIdKey = findCol("oxatisid", "oxid", "idoxatis") ?? "OxatisId";
-
-      for (const row of aRows) {
-        const ean = str(row[eanKey]);
-        const codeEtat = Number(row[codeEtatKey]);
-        const oxId = row[oxatisIdKey];
-        if (ean && codeEtat === 0) {
-          articleMap.set(ean, {
-            oxatisId: oxId != null && String(oxId).trim() !== "" && String(oxId) !== "0"
-              ? String(Math.round(Number(oxId)))
-              : null,
-          });
-        }
-      }
-
-      // ── Feuille Matrice → valeurs calculées ──
-      const mSheet = wb.Sheets["Matrice"];
-      if (!mSheet) throw new Error("Feuille 'Matrice' introuvable dans le fichier.");
-      const mRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(mSheet, { defval: null });
-
-      const parsed: MatriceArticle[] = [];
-      for (const row of mRows) {
-        const ean = str(row["Code EAN"]);
-        if (!ean || !articleMap.has(ean)) continue;
-
-        const info = articleMap.get(ean)!;
-
-        // Date de disponibilité
-        let dateDispo = "";
-        const rawDate = row["Date de disponibilité"];
-        if (rawDate instanceof Date && !isNaN(rawDate.getTime())) {
-          dateDispo = rawDate.toISOString().slice(0, 10);
-        } else if (typeof rawDate === "string" && rawDate.trim()) {
-          dateDispo = rawDate.trim().slice(0, 10);
-        }
-
-        // Description longue — préfixer avec <!--#WYSIWYG#-->
-        const descLong = str(row["Description détaillée"]);
-        const descLongFinal = descLong && !descLong.startsWith("<!--#WYSIWYG#-->")
-          ? "<!--#WYSIWYG#-->" + descLong
-          : descLong;
-
-        parsed.push({
-          ean,
-          itemSKU:           str(row["Code produit"]),
-          langue:            str(row["Langue de présentation"]).toLowerCase() || "fr",
-          nom:               str(row["Nom"]),
-          prixTTC:           Number(row["Prix 1 TTC"]) || 0,
-          tva:               Number(row["Taux de TVA (en valeur)"]) || 20,
-          categories: [
-            row["Nom de la première catégorie"],
-            row["Nom de la deuxième catégorie"],
-            row["Nom de la troisième catégorie"],
-            row["Nom de la quatrième catégorie"],
-            row["Nom de la 5ème catégorie"],
-          ].filter(Boolean).map(String),
-          description:       str(row["Description"]),
-          descriptionLongue: descLongFinal,
-          metaTitle:         str(row["Titre de page (Balise <TITLE>)"]),
-          metaDescription:   str(row["Description (META description)"]),
-          urlCanonique:      str(row["Contenu de l'URL canonique"]),
-          afficherStock:     str(row["Afficher le niveau du stock"]),
-          montrerSiIndispo:  str(row["Montrer cet article même si il est indisponible"]),
-          causeIndispo:      str(row["Cause de l'indisponibilité"]),
-          imageZoom1:        str(row["1ère image zoom"]),
-          imageMain:         str(row["Image principale"]),
-          imageVignette:     str(row["Petite image (vignette)"]),
-          dateDispo,
-          afficherDelai:     str(row["Afficher le délai de disponibilité"]),
-          isNew:             !info.oxatisId,
-          oxatisId:          info.oxatisId,
-        });
-      }
-
-      setArticles(parsed);
-      setFileName(file.name);
-      if (hasCredentials) fetchCategories(appId, token);
-    } catch (err) {
-      setParseError(err instanceof Error ? err.message : "Erreur de parsing du fichier.");
-    } finally {
-      setParsing(false);
-    }
-  }, []);
-
-  // ── Drag & Drop ──────────────────────────────────────────────────────────
-
-  const onDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const file = e.dataTransfer.files[0];
-    if (file) parseFile(file);
-  }, [parseFile]);
-
-  const onDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  }, []);
-
-  const onDragLeave = useCallback(() => setIsDragging(false), []);
-
-  const onFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) parseFile(file);
-    e.target.value = "";
-  };
-
-  // ── Filtres & sélection ──────────────────────────────────────────────────
 
   const filtered = articles.filter((a) => {
     if (filter === "new" && !a.isNew) return false;
@@ -326,217 +85,19 @@ export default function MatricePage() {
   const selectedNew = selectedArticles.filter((a) => a.isNew);
   const selectedExisting = selectedArticles.filter((a) => !a.isNew);
 
-  // ── Exécution ────────────────────────────────────────────────────────────
-
-  const creds = credParams;
-
-  // Vérifie si les articles "nouveaux" existent déjà sur Oxatis avant de créer
   const startCreate = async () => {
-    const items = selectedNew;
-    if (!items.length) return;
-
-    const credQuery = serverHasCredentials
-      ? ""
-      : `appId=${encodeURIComponent(appId)}&token=${encodeURIComponent(token)}&`;
-
-    setVerifying(true);
-    setVerifyProgress({ current: 0, total: items.length });
-
-    const foundConflicts: ConflictItem[] = [];
-    const trulyNew: MatriceArticle[] = [];
-
-    for (let i = 0; i < items.length; i++) {
-      const a = items[i];
-      try {
-        const res = await fetch(
-          `/api/oxatis/product-detail?${credQuery}itemSKU=${encodeURIComponent(a.itemSKU)}`
-        );
-        if (res.ok) {
-          const data = await res.json();
-          foundConflicts.push({
-            matrice: a,
-            oxatis: {
-              name: data.name || "",
-              description: data.description || "",
-              descriptionLong: data.descriptionLong || "",
-              dateOfAvailability: data.dateOfAvailability || "",
-              oxatisId: data.oxatisId || "",
-            },
-          });
-        } else {
-          trulyNew.push(a);
-        }
-      } catch {
-        trulyNew.push(a);
-      }
-      setVerifyProgress({ current: i + 1, total: items.length });
-    }
-
-    setVerifying(false);
-
-    if (foundConflicts.length > 0) {
-      setConflicts(foundConflicts);
-      setPendingNew(trulyNew);
-      setConflictModalOpen(true);
-    } else {
-      executeCreate(trulyNew);
-    }
+    await checkConflicts(selectedNew, (trulyNew) => executeCreate(trulyNew));
   };
 
-  const executeCreate = async (items: MatriceArticle[]) => {
-    if (!items.length) return;
-    setProgressModalOpen(true);
-    setProgress({ current: 0, total: items.length, errors: [], label: "Création en cours..." });
-    const errors: string[] = [];
-
-    for (let i = 0; i < items.length; i++) {
-      const a = items[i];
-      try {
-        const priceHT = a.tva > 0 ? a.prixTTC / (1 + a.tva / 100) : a.prixTTC;
-
-        // 1. Créer le produit (format attendu par la route : { product: {...} })
-        const res = await fetch("/api/oxatis/create-product", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            ...creds,
-            product: {
-              itemSKU:     a.itemSKU,
-              name:        a.nom,
-              priceHT:     parseFloat(priceHT.toFixed(2)),
-              tva:         a.tva,
-              ean:         a.ean,
-              stock:       0,
-              description: a.description,
-              categories: defaultCategory
-                ? [{ oxId: defaultCategory.oxId, name: defaultCategory.name, parentOxId: defaultCategory.parentOxId, slot: 1 }]
-                : [],
-            },
-          }),
-        });
-
-        const d = await res.json();
-        if (!res.ok) {
-          errors.push(`${a.itemSKU} (création) : ${d.error || "Erreur"}`);
-        } else {
-          if (d.categoriesResult?.error) {
-            errors.push(`${a.itemSKU} (catégories) : ${d.categoriesResult.error}`);
-          }
-          // 2. Description longue
-          if (a.descriptionLongue) {
-            const r2 = await fetch("/api/oxatis/update-description", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ ...creds, itemSKU: a.itemSKU, descriptionLong: a.descriptionLongue }),
-            });
-            if (!r2.ok) {
-              const d2 = await r2.json();
-              errors.push(`${a.itemSKU} (description) : ${d2.error || "Erreur"}`);
-            }
-          }
-          // 3. Date de disponibilité
-          if (a.dateDispo) {
-            const r3 = await fetch("/api/oxatis/update-availability", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ ...creds, itemSKU: a.itemSKU, dateOfAvailability: a.dateDispo }),
-            });
-            if (!r3.ok) {
-              const d3 = await r3.json();
-              errors.push(`${a.itemSKU} (date dispo) : ${d3.error || "Erreur"}`);
-            }
-          }
-          // 4. Visibilité (rendre visible)
-          await fetch("/api/oxatis/update-visibility", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ...creds, itemSKU: a.itemSKU, visible: true }),
-          });
-        }
-      } catch {
-        errors.push(`${a.itemSKU} : Erreur réseau`);
-      }
-      setProgress({
-        current: i + 1,
-        total: items.length,
-        errors: [...errors],
-        label: i + 1 < items.length ? "Création en cours..." : "Terminé !",
-      });
-      if (i + 1 < items.length) await sleep(200);
-    }
+  const onFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) parseFile(file, appId, token, hasCredentials);
+    e.target.value = "";
   };
 
-  const executeUpdate = async (items: MatriceArticle[] = selectedExisting, fields: UpdateFields = updateFields) => {
-    if (!items.length) return;
-    setUpdateModalOpen(false);
-    setProgressModalOpen(true);
-    setProgress({ current: 0, total: items.length, errors: [], label: "Mise à jour en cours..." });
-    const errors: string[] = [];
-
-    for (let i = 0; i < items.length; i++) {
-      const a = items[i];
-      try {
-        // 1. Nom
-        if (fields.nom && a.nom) {
-          const r = await fetch("/api/oxatis/update-name", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ...creds, itemSKU: a.itemSKU, name: a.nom }),
-          });
-          if (!r.ok) errors.push(`${a.itemSKU} (nom) : ${(await r.json()).error || "Erreur"}`);
-        }
-        // 2. Prix
-        if (fields.prix && a.prixTTC > 0) {
-          const priceHT = a.tva > 0 ? a.prixTTC / (1 + a.tva / 100) : a.prixTTC;
-          const r = await fetch("/api/oxatis/update-price", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ...creds, itemSKU: a.itemSKU, priceHT: parseFloat(priceHT.toFixed(2)), tva: a.tva }),
-          });
-          if (!r.ok) errors.push(`${a.itemSKU} (prix) : ${(await r.json()).error || "Erreur"}`);
-        }
-        // 3. Description longue
-        if (fields.description && a.descriptionLongue) {
-          const r = await fetch("/api/oxatis/update-description", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ...creds, itemSKU: a.itemSKU, descriptionLong: a.descriptionLongue }),
-          });
-          if (!r.ok) errors.push(`${a.itemSKU} (description) : ${(await r.json()).error || "Erreur"}`);
-        }
-        // 4. Date de disponibilité
-        if (fields.dateDispo) {
-          const r = await fetch("/api/oxatis/update-availability", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ...creds, itemSKU: a.itemSKU, dateOfAvailability: a.dateDispo }),
-          });
-          if (!r.ok) errors.push(`${a.itemSKU} (date dispo) : ${(await r.json()).error || "Erreur"}`);
-        }
-      } catch {
-        errors.push(`${a.itemSKU} : Erreur réseau`);
-      }
-      setProgress({
-        current: i + 1,
-        total: items.length,
-        errors: [...errors],
-        label: i + 1 < items.length ? "Mise à jour en cours..." : "Terminé !",
-      });
-      if (i + 1 < items.length) await sleep(200);
-    }
-  };
-
-  const closeProgress = () => {
-    setProgressModalOpen(false);
-    setProgress(null);
-  };
-
-  // Description longue sans le préfixe WYSIWYG pour l'affichage
-  function descHtml(a: MatriceArticle): string {
-    return a.descriptionLongue.replace("<!--#WYSIWYG#-->", "");
+  function descHtml(descriptionLongue: string): string {
+    return descriptionLongue.replace("<!--#WYSIWYG#-->", "");
   }
-
-  // ── Rendu ────────────────────────────────────────────────────────────────
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -548,7 +109,7 @@ export default function MatricePage() {
         </div>
         {articles.length > 0 && (
           <button
-            onClick={() => { setArticles([]); setFileName(""); setSelectedEans(new Set()); setFilter("all"); setSearch(""); }}
+            onClick={() => { reset(); setSelectedEans(new Set()); setFilter("all"); setSearch(""); }}
             className="btn btn-secondary btn-sm"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -571,7 +132,7 @@ export default function MatricePage() {
         {/* ── Zone de drop ────────────────────────────────────────────── */}
         {articles.length === 0 && (
           <div
-            onDrop={onDrop}
+            onDrop={(e) => onDrop(e, appId, token, hasCredentials)}
             onDragOver={onDragOver}
             onDragLeave={onDragLeave}
             onClick={() => fileInputRef.current?.click()}
@@ -821,7 +382,6 @@ export default function MatricePage() {
         {preview && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className="card w-full max-w-3xl max-h-[90vh] flex flex-col" style={{ borderRadius: "1rem" }}>
-              {/* Header */}
               <div className="px-6 py-4 flex items-start justify-between flex-shrink-0" style={{ borderBottom: "1px solid var(--border)" }}>
                 <div className="flex-1 mr-4">
                   <div className="flex items-center gap-2 mb-1">
@@ -835,7 +395,6 @@ export default function MatricePage() {
                 <button onClick={() => setPreview(null)} className="btn btn-ghost btn-sm text-2xl font-light" style={{ padding: "0.25rem 0.5rem" }}>×</button>
               </div>
 
-              {/* Infos rapides */}
               <div className="px-6 py-3 flex-shrink-0 flex flex-wrap gap-4 text-sm" style={{ borderBottom: "1px solid var(--border)", background: "var(--subtle)" }}>
                 <div>
                   <span className="text-xs uppercase tracking-wide" style={{ color: "var(--muted)" }}>Prix TTC</span>
@@ -859,7 +418,6 @@ export default function MatricePage() {
                 )}
               </div>
 
-              {/* Description longue rendue */}
               <div className="flex-1 overflow-y-auto px-6 py-5">
                 {preview.descriptionLongue ? (
                   <>
@@ -870,13 +428,12 @@ export default function MatricePage() {
                     <div
                       className="prose prose-sm max-w-none text-sm text-gray-700 leading-relaxed p-4 rounded-lg"
                       style={{ background: "var(--subtle)", border: "1px solid var(--border)" }}
-                      dangerouslySetInnerHTML={{ __html: descHtml(preview) }}
+                      dangerouslySetInnerHTML={{ __html: descHtml(preview.descriptionLongue) }}
                     />
                   </>
                 ) : (
                   <p className="text-sm italic" style={{ color: "var(--muted)" }}>Aucune description longue.</p>
                 )}
-
                 {preview.description && (
                   <div className="mt-4">
                     <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--muted)" }}>Description courte</span>
@@ -885,7 +442,6 @@ export default function MatricePage() {
                 )}
               </div>
 
-              {/* Footer */}
               <div className="px-6 py-4 flex justify-between items-center flex-shrink-0" style={{ borderTop: "1px solid var(--border)" }}>
                 <div className="flex gap-2">
                   {preview.isNew && !selectedEans.has(preview.ean) && (
@@ -931,7 +487,6 @@ export default function MatricePage() {
         {conflictModalOpen && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className="card w-full max-w-3xl max-h-[90vh] flex flex-col" style={{ borderRadius: "1rem" }}>
-              {/* Header */}
               <div className="px-6 py-4 flex-shrink-0" style={{ borderBottom: "1px solid var(--border)" }}>
                 <div className="flex items-center gap-2 mb-1">
                   <svg className="w-5 h-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -945,7 +500,6 @@ export default function MatricePage() {
                 </p>
               </div>
 
-              {/* Conflict list */}
               <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
                 {conflicts.map((c, idx) => {
                   const descMatrice = c.matrice.descriptionLongue.replace("<!--#WYSIWYG#-->", "").replace(/<[^>]+>/g, " ").trim().slice(0, 140);
@@ -961,7 +515,6 @@ export default function MatricePage() {
                         {c.oxatis.oxatisId && <span className="text-xs" style={{ color: "var(--muted)" }}>OxID {c.oxatis.oxatisId}</span>}
                       </div>
                       <div className="grid grid-cols-2" style={{ borderTop: "1px solid var(--border)" }}>
-                        {/* Matrice */}
                         <div className="px-4 py-3 space-y-2">
                           <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--primary)" }}>Matrice Excel</p>
                           {nameDiff && <p className="text-xs text-gray-700"><span className="font-medium">Nom :</span> {c.matrice.nom}</p>}
@@ -973,7 +526,6 @@ export default function MatricePage() {
                             <span style={{ color: descDiff ? "#1e40af" : undefined }}>{descMatrice || "—"}</span>
                           </p>
                         </div>
-                        {/* Oxatis */}
                         <div className="px-4 py-3 space-y-2">
                           <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Sur Oxatis</p>
                           {nameDiff && <p className="text-xs text-gray-700"><span className="font-medium">Nom :</span> {c.oxatis.name}</p>}
@@ -991,14 +543,8 @@ export default function MatricePage() {
                 })}
               </div>
 
-              {/* Footer actions */}
               <div className="px-6 py-4 flex-shrink-0 flex flex-wrap gap-3 justify-end" style={{ borderTop: "1px solid var(--border)" }}>
-                <button
-                  onClick={() => setConflictModalOpen(false)}
-                  className="btn btn-secondary btn-sm"
-                >
-                  Annuler
-                </button>
+                <button onClick={() => setConflictModalOpen(false)} className="btn btn-secondary btn-sm">Annuler</button>
                 {pendingNew.length > 0 && (
                   <button
                     onClick={() => { setConflictModalOpen(false); executeCreate(pendingNew); }}
@@ -1011,7 +557,6 @@ export default function MatricePage() {
                 <button
                   onClick={() => {
                     setConflictModalOpen(false);
-                    // Met à jour les conflits (description + date dispo) puis crée les nouveaux
                     const conflictArticles = conflicts.map((c) => c.matrice);
                     executeUpdate(conflictArticles, updateFields).then(() => {
                       if (pendingNew.length > 0) executeCreate(pendingNew);
@@ -1042,7 +587,7 @@ export default function MatricePage() {
                     { key: "dateDispo",   label: "Date de disponibilité",      note: "Recommandé" },
                     { key: "nom",         label: "Nom / Titre",                note: "Écrase le titre existant" },
                     { key: "prix",        label: "Prix HT + TVA",              note: "Écrase le prix existant" },
-                  ] as { key: keyof UpdateFields; label: string; note: string }[]
+                  ] as { key: keyof typeof updateFields; label: string; note: string }[]
                 ).map(({ key, label, note }) => (
                   <label key={key} className="flex items-start gap-3 cursor-pointer group">
                     <input
@@ -1064,7 +609,7 @@ export default function MatricePage() {
               <div className="px-6 py-4 flex justify-end gap-3" style={{ borderTop: "1px solid var(--border)" }}>
                 <button onClick={() => setUpdateModalOpen(false)} className="btn btn-secondary btn-sm">Annuler</button>
                 <button
-                  onClick={() => executeUpdate()}
+                  onClick={() => executeUpdate(selectedExisting, updateFields)}
                   disabled={!Object.values(updateFields).some(Boolean)}
                   className="btn btn-primary btn-sm"
                 >
