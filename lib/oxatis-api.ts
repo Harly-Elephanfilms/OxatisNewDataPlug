@@ -4,6 +4,9 @@ const PRODUCT_SERVICES_URL =
 const CATEGORY_SERVICES_URL =
   "https://webservices.oxatis.com/webservices/httpservices/CategoryServices.aspx";
 
+const CHARACTERISTICS_SERVICES_URL =
+  "https://webservices.oxatis.com/webservices/httpservices/ProductCharacteristicsServices.aspx";
+
 const XML_NS = 'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema"';
 
 interface OxatisParams {
@@ -297,6 +300,11 @@ export async function updateProductPriceHT(
 
 // --- Création de produit ---
 
+export interface ProductFeature {
+  name: string;
+  value: string;
+}
+
 export interface ProductCreateData {
   itemSKU: string;      // Référence unique (obligatoire)
   name: string;         // Titre du produit (obligatoire)
@@ -307,6 +315,7 @@ export interface ProductCreateData {
   brand?: string;       // Marque / éditeur
   ean?: string;         // Code-barres EAN
   weight?: number;      // Poids en kg
+  features?: ProductFeature[]; // Caractéristiques — incluses dans ProductV2Add
   // Note: les images ne peuvent pas être assignées lors de la création via ProductV2Add.
   // Elles doivent être gérées séparément (galerie Oxatis).
   // Note: les catégories sont assignées séparément via updateProductCategories
@@ -326,6 +335,28 @@ export async function deleteProduct(
 ): Promise<string> {
   const data = `<?xml version="1.0" encoding="utf-8"?><Product ${XML_NS}><OxID>${escapeXml(oxatisId)}</OxID></Product>`;
   return callOxatis({ appId, token, method: "ProductDelete", data });
+}
+
+/**
+ * Met à jour les caractéristiques d'un produit sur Oxatis.
+ * Méthode API: ProductCharacteristicsUpdate sur ProductCharacteristicsServices.
+ * Chaque caractéristique peut avoir plusieurs valeurs.
+ * Exemple CSV : "Couleur=Rouge|Matière=Coton" → [{name:"Couleur", value:"Rouge"}, ...]
+ */
+export async function updateProductCharacteristics(
+  appId: string,
+  token: string,
+  itemSKU: string,
+  features: ProductFeature[]
+): Promise<string> {
+  const characteristicsXml = features
+    .map(
+      (f) =>
+        `<Characteristic><Name>${escapeXml(f.name)}</Name><SysName>${escapeXml(f.name)}</SysName><Values><string>${escapeXml(f.value)}</string></Values></Characteristic>`
+    )
+    .join("");
+  const data = `<?xml version="1.0" encoding="utf-8"?><Characteristics ${XML_NS}><ItemSKU>${escapeXml(itemSKU)}</ItemSKU>${characteristicsXml}</Characteristics>`;
+  return callOxatis({ appId, token, method: "ProductCharacteristicsUpdate", data, url: CHARACTERISTICS_SERVICES_URL });
 }
 
 /**
