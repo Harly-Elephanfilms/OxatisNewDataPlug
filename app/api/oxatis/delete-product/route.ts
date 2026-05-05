@@ -1,16 +1,13 @@
 import { deleteProduct } from "@/lib/oxatis-api";
 import { getCredentials } from "@/lib/server-credentials";
 import { oxatisResponse } from "@/lib/api-helpers";
+import { NextRequest } from "next/server";
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { oxatisId } = body as {
-      appId?: string;
-      token?: string;
-      oxatisId: string;
-    };
-    const { appId, token } = getCredentials(body.appId, body.token);
+    const body = await request.json() as { oxatisId: string };
+    const { appId, token } = getCredentials(request);
+    const { oxatisId } = body;
 
     if (!appId || !token || !oxatisId) {
       return Response.json(
@@ -20,7 +17,7 @@ export async function POST(request: Request) {
     }
 
     const xml = await deleteProduct(appId, token, oxatisId);
-    return oxatisResponse(xml, "Erreur suppression produit");
+    return oxatisResponse(xml);
   } catch (err) {
     return Response.json(
       { error: err instanceof Error ? err.message : "Erreur inconnue" },

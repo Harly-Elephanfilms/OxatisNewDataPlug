@@ -2,6 +2,7 @@ import { getCategoryTree } from "@/lib/oxatis-api";
 import { getCredentials } from "@/lib/server-credentials";
 import { extractXml, parseOxatisError } from "@/lib/api-helpers";
 import type { CategoryNode } from "@/lib/types";
+import { NextRequest } from "next/server";
 
 function parseCategoryNodes(xml: string, tagName: string): CategoryNode[] {
   const nodes: CategoryNode[] = [];
@@ -16,18 +17,15 @@ function parseCategoryNodes(xml: string, tagName: string): CategoryNode[] {
 
     if (!oxId || !name) continue;
 
-    // Parse children recursively
     const children = parseCategoryNodes(block, "ChildCategory");
-
     nodes.push({ oxId, name, parentOxId, children });
   }
 
   return nodes;
 }
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const { appId, token } = getCredentials(searchParams.get("appId"), searchParams.get("token"));
+export async function GET(request: NextRequest) {
+  const { appId, token } = getCredentials(request);
 
   if (!appId || !token) {
     return Response.json({ error: "Identifiants API requis" }, { status: 400 });

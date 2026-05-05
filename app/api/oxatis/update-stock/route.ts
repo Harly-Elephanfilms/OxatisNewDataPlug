@@ -1,17 +1,16 @@
 import { updateStockBySKU } from "@/lib/oxatis-api";
 import { getCredentials } from "@/lib/server-credentials";
+import { extractXml } from "@/lib/api-helpers";
 import { NextRequest } from "next/server";
-
-function parseXmlValue(xml: string, tag: string): string {
-  const regex = new RegExp(`<${tag}>([^<]*)</${tag}>`);
-  const match = xml.match(regex);
-  return match ? match[1] : "";
-}
 
 export async function POST(request: NextRequest) {
   try {
-    const { appId: bodyAppId, token: bodyToken, items } = await request.json();
-    const { appId, token } = getCredentials(bodyAppId, bodyToken);
+    const { appId: bodyAppId, token: bodyToken, items } = await request.json() as {
+      appId?: string;
+      token?: string;
+      items: { itemSKU: string; quantity: number }[];
+    };
+    const { appId, token } = getCredentials(request, bodyAppId, bodyToken);
 
     if (!appId || !token || !items || !Array.isArray(items)) {
       return Response.json(
@@ -25,26 +24,22 @@ export async function POST(request: NextRequest) {
       errors: [],
     };
 
-    // Update one by one (API only accepts one product per call)
-    // Process in parallel batches of 10
     const batchSize = 10;
     for (let i = 0; i < items.length; i += batchSize) {
       const batch = items.slice(i, i + batchSize);
 
-      const promises = batch.map(async (item: { itemSKU: string; quantity: number }) => {
+      const promises = batch.map(async (item) => {
         try {
           const responseXml = await updateStockBySKU(appId, token, item.itemSKU, item.quantity);
-
-          const statusCode = parseXmlValue(responseXml, "StatusCode");
+          const statusCode = extractXml(responseXml, "StatusCode");
           if (statusCode === "200") {
             results.success.push(item.itemSKU);
           } else {
-            const errorMsg = parseXmlValue(responseXml, "ErrorDetails") || "Erreur inconnue";
+            const errorMsg = extractXml(responseXml, "ErrorDetails") || "Erreur inconnue";
             results.errors.push(`${item.itemSKU}: ${errorMsg}`);
           }
         } catch (err) {
-          const message = err instanceof Error ? err.message : "Erreur inconnue";
-          results.errors.push(`${item.itemSKU}: ${message}`);
+          results.errors.push(`${item.itemSKU}: ${err instanceof Error ? err.message : "Erreur inconnue"}`);
         }
       });
 

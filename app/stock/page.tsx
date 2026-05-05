@@ -321,10 +321,8 @@ export default function StockPage() {
     const id = localAppId || appId;
     const tok = localToken || token;
     try {
-      const params = `appId=${encodeURIComponent(id)}&token=${encodeURIComponent(tok)}`;
-      const res = await fetch(`/api/oxatis/test-credentials?${params}`);
-      setCredentialsTestResult(res.ok ? "ok" : "error");
-      if (res.ok) setCredentials(id, tok);
+      const result = await setCredentials(id, tok);
+      setCredentialsTestResult(result.success ? "ok" : "error");
     } catch {
       setCredentialsTestResult("error");
     } finally {

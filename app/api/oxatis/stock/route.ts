@@ -28,8 +28,8 @@ function parseProductStockResponse(xml: string): StockResult | null {
 
 export async function POST(request: NextRequest) {
   try {
-    const { appId: bodyAppId, token: bodyToken, skus } = await request.json();
-    const { appId, token } = getCredentials(bodyAppId, bodyToken);
+    const { appId: bodyAppId, token: bodyToken, skus } = await request.json() as { appId?: string; token?: string; skus: { sku: string; name: string; oxatisId?: string }[] };
+    const { appId, token } = getCredentials(request, bodyAppId, bodyToken);
 
     if (!appId || !token) {
       return Response.json({ error: "AppId et Token requis" }, { status: 400 });

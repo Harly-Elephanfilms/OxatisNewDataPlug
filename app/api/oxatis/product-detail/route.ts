@@ -1,14 +1,13 @@
 import { getProductDetailBySKU } from "@/lib/oxatis-api";
 import { getCredentials } from "@/lib/server-credentials";
 import { extractXml, parseOxatisError } from "@/lib/api-helpers";
+import { NextRequest } from "next/server";
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const itemSKU = searchParams.get("itemSKU") ?? "";
-    const appIdParam = searchParams.get("appId") ?? undefined;
-    const tokenParam = searchParams.get("token") ?? undefined;
-    const { appId, token } = getCredentials(appIdParam, tokenParam);
+    const { appId, token } = getCredentials(request);
 
     if (!appId || !token || !itemSKU) {
       return Response.json(
@@ -27,10 +26,8 @@ export async function GET(request: Request) {
     const descriptionLong = extractXml(xml, "LongDescription");
     const description = extractXml(xml, "Description");
     const rawDate = extractXml(xml, "DateOfAvailability");
-    // Retourner uniquement la partie date (YYYY-MM-DD) pour l'input type=date
     const dateOfAvailability = rawDate ? rawDate.split("T")[0] : "";
 
-    // Comportement hors stock
     const showIfOutOfStock = extractXml(xml, "ShowIfOutOfStock").toLowerCase() === "true";
     const saleIfOutOfStock = extractXml(xml, "SaleIfOutOfStock").toLowerCase() === "true";
     const saleIfOutOfStockScenario = parseInt(extractXml(xml, "SaleIfOutOfStockScenario") || "0", 10);

@@ -2,10 +2,10 @@ import { getProductCategories, updateProductCategories } from "@/lib/oxatis-api"
 import type { CategoryAssignment } from "@/lib/oxatis-api";
 import { getCredentials } from "@/lib/server-credentials";
 import { oxatisResponse, extractXml, parseOxatisError } from "@/lib/api-helpers";
+import { NextRequest } from "next/server";
 
 function parseProductCategories(xml: string): CategoryAssignment[] {
   const categories: CategoryAssignment[] = [];
-  // Categories are named Category1, Category2, ... up to Category10
   for (let i = 1; i <= 10; i++) {
     const catRegex = new RegExp(`<Category${i}>([\\s\\S]*?)</Category${i}>`, "i");
     const match = xml.match(catRegex);
@@ -14,7 +14,6 @@ function parseProductCategories(xml: string): CategoryAssignment[] {
       const oxId = extractXml(block, "OxID");
       const name = extractXml(block, "Name").trim();
       const parentOxId = extractXml(block, "ParentOxId") || "0";
-      // Ignorer les catégories vides (OxID=0 ou nom vide)
       if (oxId && oxId !== "0" && name) {
         categories.push({ oxId, name, parentOxId, slot: i });
       }
@@ -23,10 +22,9 @@ function parseProductCategories(xml: string): CategoryAssignment[] {
   return categories;
 }
 
-// GET: fetch categories for a product
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const { appId, token } = getCredentials(searchParams.get("appId"), searchParams.get("token"));
+  const { appId, token } = getCredentials(request);
   const oxatisId = searchParams.get("oxatisId");
 
   if (!appId || !token || !oxatisId) {
@@ -49,24 +47,21 @@ export async function GET(request: Request) {
   }
 }
 
-// POST: update categories for a product
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { oxatisId, categories } = body as {
-      appId?: string;
-      token?: string;
+    const body = await request.json() as {
       oxatisId: string;
       categories: CategoryAssignment[];
     };
-    const { appId, token } = getCredentials(body.appId, body.token);
+    const { appId, token } = getCredentials(request);
+    const { oxatisId, categories } = body;
 
     if (!appId || !token || !oxatisId || !categories) {
-      return Response.json({ error: "Paramètres manquants", detail: { appId: !!appId, token: !!token, oxatisId, categories } }, { status: 400 });
+      return Response.json({ error: "Paramètres manquants" }, { status: 400 });
     }
 
     const xmlResponse = await updateProductCategories(appId, token, oxatisId, categories);
-    return oxatisResponse(xmlResponse, "Erreur mise à jour catégories");
+    return oxatisResponse(xmlResponse);
   } catch (err) {
     return Response.json(
       { error: err instanceof Error ? err.message : "Erreur inconnue" },

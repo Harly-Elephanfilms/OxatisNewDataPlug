@@ -6,16 +6,14 @@ export function useArticles() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchArticles = useCallback(async (appId: string, token: string) => {
+  const fetchArticles = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(
-        `/api/oxatis/fetch-articles?appId=${encodeURIComponent(appId)}&token=${encodeURIComponent(token)}`
-      );
-      const data = await res.json();
-      if (data.articles) {
-        setArticles(data.articles);
+      const res = await fetch("/api/oxatis/fetch-articles");
+      const data = await res.json() as { items?: Article[]; error?: string };
+      if (data.items) {
+        setArticles(data.items);
       } else {
         setError(data.error ?? "Erreur chargement articles");
       }

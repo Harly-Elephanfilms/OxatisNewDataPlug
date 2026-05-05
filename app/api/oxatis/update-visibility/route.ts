@@ -1,17 +1,16 @@
 import { updateProductVisible } from "@/lib/oxatis-api";
 import { getCredentials } from "@/lib/server-credentials";
 import { oxatisResponse } from "@/lib/api-helpers";
+import { NextRequest } from "next/server";
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { itemSKU, visible } = body as {
-      appId?: string;
-      token?: string;
+    const body = await request.json() as {
       itemSKU: string;
       visible: boolean;
     };
-    const { appId, token } = getCredentials(body.appId, body.token);
+    const { appId, token } = getCredentials(request);
+    const { itemSKU, visible } = body;
 
     if (!appId || !token || !itemSKU || visible === undefined) {
       return Response.json(
@@ -21,7 +20,7 @@ export async function POST(request: Request) {
     }
 
     const xml = await updateProductVisible(appId, token, itemSKU, visible);
-    return oxatisResponse(xml, "Erreur mise à jour visibilité");
+    return oxatisResponse(xml);
   } catch (err) {
     return Response.json(
       { error: err instanceof Error ? err.message : "Erreur inconnue" },

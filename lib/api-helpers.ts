@@ -19,7 +19,7 @@ export function extractXml(xml: string, tag: string): string {
  * - Autre StatusCode → { error, raw } avec status 500
  * - Réponse vide ou HTML → { error, raw } avec status 500
  */
-export function oxatisResponse(xml: string, fallbackError: string): Response {
+export function oxatisResponse(xml: string, _fallbackError?: string): Response {
   const error = parseOxatisError(xml);
   if (error) return Response.json({ error, raw: xml }, { status: 500 });
   return Response.json({ success: true });

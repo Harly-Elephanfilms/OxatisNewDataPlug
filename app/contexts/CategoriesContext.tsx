@@ -7,7 +7,7 @@ interface CategoriesContextValue {
   categoryTree: CategoryNode[];
   flatCategories: CategoryNode[];
   loading: boolean;
-  fetchCategories: (appId: string, token: string) => Promise<void>;
+  fetchCategories: (appId?: string, token?: string) => Promise<void>;
 }
 
 const CategoriesContext = createContext<CategoriesContextValue>({
@@ -27,20 +27,19 @@ export function CategoriesProvider({ children }: { children: ReactNode }) {
   const [fetched, setFetched] = useState(false);
 
   const fetchCategories = useCallback(
-    async (appId: string, token: string) => {
+    async (_appId?: string, _token?: string) => {
       if (fetched || loading) return;
       setLoading(true);
       try {
-        const res = await fetch(
-          `/api/oxatis/categories?appId=${encodeURIComponent(appId)}&token=${encodeURIComponent(token)}`
-        );
-        const data = await res.json();
+        const res = await fetch("/api/oxatis/categories");
+        const data = await res.json() as { tree?: CategoryNode[]; error?: string };
         if (data.tree) {
           setCategoryTree(data.tree);
           setFetched(true);
         }
-      } catch {}
-      finally {
+      } catch {
+        // network error — caller can retry
+      } finally {
         setLoading(false);
       }
     },
