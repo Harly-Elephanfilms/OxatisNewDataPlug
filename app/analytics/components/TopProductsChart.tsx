@@ -39,8 +39,8 @@ export function TopProductsChart({ products }: Props) {
             contentStyle={{ fontSize: 12 }}
           />
           <Bar dataKey="quantité" radius={[0, 4, 4, 0]}>
-            {data.map((_, i) => (
-              <Cell key={i} fill={i === 0 ? "#6366f1" : i < 3 ? "#818cf8" : "#c7d2fe"} />
+            {data.map((entry, i) => (
+              <Cell key={entry.sku} fill={i === 0 ? "#6366f1" : i < 3 ? "#818cf8" : "#c7d2fe"} />
             ))}
           </Bar>
         </BarChart>

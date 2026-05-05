@@ -1,6 +1,6 @@
 // app/analytics/hooks/useSalesAnalysis.ts
 "use client";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import type { SalesAnalysis } from "@/lib/oxatis-orders";
 
 type Status = "idle" | "loading" | "done" | "error";
@@ -25,8 +25,11 @@ export function useSalesAnalysis(): UseSalesAnalysis {
   const [progress, setProgress] = useState<Progress>({ done: 0, total: 0, errors: 0 });
   const [result, setResult] = useState<SalesAnalysis | null>(null);
   const [error, setError] = useState("");
+  const sourceRef = useRef<EventSource | null>(null);
 
   const reset = useCallback(() => {
+    sourceRef.current?.close();
+    sourceRef.current = null;
     setStatus("idle");
     setProgress({ done: 0, total: 0, errors: 0 });
     setResult(null);
@@ -34,6 +37,8 @@ export function useSalesAnalysis(): UseSalesAnalysis {
   }, []);
 
   const analyze = useCallback((from: string, to: string) => {
+    sourceRef.current?.close();
+
     setStatus("loading");
     setProgress({ done: 0, total: 0, errors: 0 });
     setResult(null);
@@ -42,9 +47,10 @@ export function useSalesAnalysis(): UseSalesAnalysis {
     const source = new EventSource(
       `/api/oxatis/orders/stream?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
     );
+    sourceRef.current = source;
 
     source.onmessage = (e: MessageEvent) => {
-      const payload = JSON.parse(e.data as string) as {
+      let payload: {
         type: string;
         count?: number;
         done?: number;
@@ -53,6 +59,14 @@ export function useSalesAnalysis(): UseSalesAnalysis {
         data?: SalesAnalysis;
         message?: string;
       };
+      try {
+        payload = JSON.parse(e.data as string);
+      } catch {
+        setError("Réponse serveur invalide.");
+        setStatus("error");
+        source.close();
+        return;
+      }
 
       if (payload.type === "total") {
         setProgress((p) => ({ ...p, total: payload.count ?? 0 }));
