@@ -1,10 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   parseOrderCount,
   parseOrderIds,
   parseTotalPages,
   parseOrderDetails,
   aggregateOrders,
+  getOrderDetails,
 } from "@/lib/oxatis-orders";
 
 describe("parseOrderCount", () => {
@@ -104,6 +105,28 @@ describe("parseOrderDetails", () => {
     const result = parseOrderDetails(xml);
     expect(result).not.toBeNull();
     expect(result!.items).toHaveLength(0);
+  });
+});
+
+describe("getOrderDetails — orderId validation", () => {
+  it("throws on non-numeric orderId", async () => {
+    await expect(getOrderDetails("app", "tok", "<script>")).rejects.toThrow(
+      "Invalid orderId: <script>"
+    );
+  });
+
+  it("throws on orderId with alphanumeric content", async () => {
+    await expect(getOrderDetails("app", "tok", "123abc")).rejects.toThrow(
+      "Invalid orderId: 123abc"
+    );
+  });
+
+  it("does not throw on a purely numeric orderId (network call is expected to fail)", async () => {
+    // A valid numeric orderId passes the guard; the subsequent fetch will fail
+    // in the test environment — we only care that it does NOT throw our guard error.
+    await expect(getOrderDetails("app", "tok", "12345")).rejects.not.toThrow(
+      "Invalid orderId: 12345"
+    );
   });
 });
 

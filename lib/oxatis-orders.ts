@@ -201,7 +201,7 @@ export async function getAllOrderIds(
     allIds.push(...parseOrderIds(xml));
     totalPages = parseTotalPages(xml);
     page++;
-  } while (page <= totalPages);
+  } while (page <= Math.min(totalPages, 500));
 
   return allIds;
 }
@@ -211,6 +211,7 @@ export async function getOrderDetails(
   token: string,
   orderId: string
 ): Promise<ParsedOrder | null> {
+  if (!/^\d+$/.test(orderId)) throw new Error(`Invalid orderId: ${orderId}`);
   const data = `<?xml version="1.0" encoding="utf-8"?><Order ${XML_NS}><OxID>${orderId}</OxID></Order>`;
   const xml = await callOrderApi(appId, token, "OrderGetDetails", data);
   return parseOrderDetails(xml);
