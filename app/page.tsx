@@ -378,7 +378,7 @@ export default function Home() {
               Outil interne — elephantfilms.com
             </p>
             <p style={{ fontSize: "0.75rem", color: "#94a3b8", margin: "0.1rem 0 0" }}>
-              Les credentials API Oxatis sont sauvegardés localement dans votre navigateur.
+              Les credentials API Oxatis sont stockés dans une session sécurisée (cookie httpOnly).
             </p>
           </div>
         </div>
