@@ -11,10 +11,17 @@ interface Progress {
   errors: number;
 }
 
+/** Info renvoyée quand le serveur a plafonné le nombre de commandes traitées. */
+interface Truncation {
+  processed: number;
+  available: number;
+}
+
 interface UseSalesAnalysis {
   status: Status;
   progress: Progress;
   result: SalesAnalysis | null;
+  truncated: Truncation | null;
   error: string;
   analyze: (from: string, to: string) => void;
   reset: () => void;
@@ -24,6 +31,7 @@ export function useSalesAnalysis(): UseSalesAnalysis {
   const [status, setStatus] = useState<Status>("idle");
   const [progress, setProgress] = useState<Progress>({ done: 0, total: 0, errors: 0 });
   const [result, setResult] = useState<SalesAnalysis | null>(null);
+  const [truncated, setTruncated] = useState<Truncation | null>(null);
   const [error, setError] = useState("");
   const sourceRef = useRef<EventSource | null>(null);
 
@@ -33,6 +41,7 @@ export function useSalesAnalysis(): UseSalesAnalysis {
     setStatus("idle");
     setProgress({ done: 0, total: 0, errors: 0 });
     setResult(null);
+    setTruncated(null);
     setError("");
   }, []);
 
@@ -42,6 +51,7 @@ export function useSalesAnalysis(): UseSalesAnalysis {
     setStatus("loading");
     setProgress({ done: 0, total: 0, errors: 0 });
     setResult(null);
+    setTruncated(null);
     setError("");
 
     const source = new EventSource(
@@ -58,6 +68,8 @@ export function useSalesAnalysis(): UseSalesAnalysis {
         errors?: number;
         data?: SalesAnalysis;
         message?: string;
+        processed?: number;
+        available?: number;
       };
       try {
         payload = JSON.parse(e.data as string);
@@ -70,6 +82,8 @@ export function useSalesAnalysis(): UseSalesAnalysis {
 
       if (payload.type === "total") {
         setProgress((p) => ({ ...p, total: payload.count ?? 0 }));
+      } else if (payload.type === "truncated") {
+        setTruncated({ processed: payload.processed ?? 0, available: payload.available ?? 0 });
       } else if (payload.type === "progress") {
         setProgress({
           done: payload.done ?? 0,
@@ -94,5 +108,5 @@ export function useSalesAnalysis(): UseSalesAnalysis {
     };
   }, []);
 
-  return { status, progress, result, error, analyze, reset };
+  return { status, progress, result, truncated, error, analyze, reset };
 }

@@ -1,7 +1,7 @@
 import { createProduct, updateProductCategoriesBySKU, updateProductCharacteristics } from "@/lib/oxatis-api";
 import type { ProductCreateData, CategoryAssignment, ProductFeature } from "@/lib/oxatis-api";
 import { getCredentials } from "@/lib/server-credentials";
-import { parseOxatisError, extractXml } from "@/lib/api-helpers";
+import { parseOxatisError, extractXml, badRequest, toFiniteNumber } from "@/lib/api-helpers";
 import { NextRequest } from "next/server";
 
 export async function POST(request: NextRequest) {
@@ -17,6 +17,16 @@ export async function POST(request: NextRequest) {
         { error: "Paramètres manquants (appId, token, product.itemSKU, product.name)" },
         { status: 400 }
       );
+    }
+
+    // Normalise les champs numériques : une chaîne mal typée ferait planter
+    // `.toFixed()` ou serait interpolée telle quelle dans le XML.
+    for (const field of ["priceHT", "tva", "stock", "weight"] as const) {
+      if (product[field] != null) {
+        const n = toFiniteNumber(product[field]);
+        if (n === null) return badRequest(`Le champ product.${field} doit être un nombre`);
+        product[field] = n;
+      }
     }
 
     const xmlResponse = await createProduct(appId, token, product);

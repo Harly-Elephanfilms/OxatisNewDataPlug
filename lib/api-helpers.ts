@@ -58,3 +58,23 @@ export function parseOxatisError(xml: string): string | null {
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+/**
+ * Convertit une valeur non fiable (issue d'un corps JSON) en nombre fini.
+ * Accepte un `number` fini ou une chaîne numérique ; retourne `null` sinon.
+ * Évite qu'une chaîne fasse planter `.toFixed()` ou soit injectée telle quelle
+ * dans le XML.
+ */
+export function toFiniteNumber(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string" && value.trim() !== "") {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+/** Réponse 400 standardisée pour une erreur de validation. */
+export function badRequest(message: string): Response {
+  return Response.json({ error: message }, { status: 400 });
+}

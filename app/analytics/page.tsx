@@ -28,7 +28,7 @@ export default function AnalyticsPage() {
   const [brandSort, setBrandSort] = useState<BrandSort>("count");
   const [brandSearch, setBrandSearch] = useState("");
   const [activeTab, setActiveTab] = useState<"catalogue" | "ventes">("catalogue");
-  const { status, progress, result, error: salesError, analyze } = useSalesAnalysis();
+  const { status, progress, result, truncated, error: salesError, analyze } = useSalesAnalysis();
 
   const fetchData = async () => {
     setLoading(true);
@@ -425,6 +425,14 @@ export default function AnalyticsPage() {
             {status === "loading" && (
               <div style={{ marginBottom: "1.5rem" }}>
                 <SalesProgress done={progress.done} total={progress.total} errors={progress.errors} />
+              </div>
+            )}
+
+            {/* Avertissement de troncature */}
+            {status === "done" && truncated && (
+              <div className="alert alert-warning" style={{ marginBottom: "1.5rem" }}>
+                Résultats partiels : {truncated.processed.toLocaleString("fr-FR")} commandes analysées sur{" "}
+                {truncated.available.toLocaleString("fr-FR")} disponibles sur la période. Affinez la plage de dates pour une analyse complète.
               </div>
             )}
 

@@ -9,6 +9,24 @@ const CHARACTERISTICS_SERVICES_URL =
 
 const XML_NS = 'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema"';
 
+export function escapeXml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+/**
+ * Un numéro de slot Oxatis est un entier 1–10 interpolé dans un NOM de balise
+ * (`<Category{slot}>`), donc non échappable : il doit être validé strictement
+ * pour éviter toute injection de balise XML.
+ */
+function isValidSlot(slot: unknown): slot is number {
+  return typeof slot === "number" && Number.isInteger(slot) && slot >= 1 && slot <= 10;
+}
+
 interface OxatisParams {
   appId: string;
   token: string;
@@ -52,7 +70,7 @@ export async function getProductByOxId(
   token: string,
   oxatisId: string
 ): Promise<string> {
-  const data = `<?xml version="1.0" encoding="utf-8"?><Product ${XML_NS}><OxID>${oxatisId}</OxID></Product>`;
+  const data = `<?xml version="1.0" encoding="utf-8"?><Product ${XML_NS}><OxID>${escapeXml(oxatisId)}</OxID></Product>`;
   return callOxatis({ appId, token, method: "ProductGet", data });
 }
 
@@ -61,7 +79,7 @@ export async function getProductBySKU(
   token: string,
   itemSKU: string
 ): Promise<string> {
-  const data = `<?xml version="1.0" encoding="utf-8"?><Product ${XML_NS}><ItemSKU>${itemSKU}</ItemSKU></Product>`;
+  const data = `<?xml version="1.0" encoding="utf-8"?><Product ${XML_NS}><ItemSKU>${escapeXml(itemSKU)}</ItemSKU></Product>`;
   return callOxatis({ appId, token, method: "ProductGet", data });
 }
 
@@ -71,7 +89,7 @@ export async function getStockByOxId(
   token: string,
   oxatisId: string
 ): Promise<string> {
-  const data = `<?xml version="1.0" encoding="utf-8"?><Product ${XML_NS}><OxID>${oxatisId}</OxID></Product>`;
+  const data = `<?xml version="1.0" encoding="utf-8"?><Product ${XML_NS}><OxID>${escapeXml(oxatisId)}</OxID></Product>`;
   return callOxatis({ appId, token, method: "ProductGetQuantityInStock", data });
 }
 
@@ -81,7 +99,7 @@ export async function getStockBySKU(
   token: string,
   itemSKU: string
 ): Promise<string> {
-  const data = `<?xml version="1.0" encoding="utf-8"?><Product ${XML_NS}><ItemSKU>${itemSKU}</ItemSKU></Product>`;
+  const data = `<?xml version="1.0" encoding="utf-8"?><Product ${XML_NS}><ItemSKU>${escapeXml(itemSKU)}</ItemSKU></Product>`;
   return callOxatis({ appId, token, method: "ProductGetQuantityInStock", data });
 }
 
@@ -93,7 +111,7 @@ export async function updateStockByOxId(
   quantity: number,
   append: boolean = false
 ): Promise<string> {
-  const data = `<?xml version="1.0" encoding="utf-8"?><Product ${XML_NS}><OxID>${oxatisId}</OxID><QuantityInStock><Value>${quantity}</Value><Append>${append}</Append></QuantityInStock></Product>`;
+  const data = `<?xml version="1.0" encoding="utf-8"?><Product ${XML_NS}><OxID>${escapeXml(oxatisId)}</OxID><QuantityInStock><Value>${quantity}</Value><Append>${append}</Append></QuantityInStock></Product>`;
   return callOxatis({ appId, token, method: "ProductUpdateQuantityInStock", data });
 }
 
@@ -105,7 +123,7 @@ export async function updateStockBySKU(
   quantity: number,
   append: boolean = false
 ): Promise<string> {
-  const data = `<?xml version="1.0" encoding="utf-8"?><Product ${XML_NS}><ItemSKU>${itemSKU}</ItemSKU><QuantityInStock><Value>${quantity}</Value><Append>${append}</Append></QuantityInStock></Product>`;
+  const data = `<?xml version="1.0" encoding="utf-8"?><Product ${XML_NS}><ItemSKU>${escapeXml(itemSKU)}</ItemSKU><QuantityInStock><Value>${quantity}</Value><Append>${append}</Append></QuantityInStock></Product>`;
   return callOxatis({ appId, token, method: "ProductUpdateQuantityInStock", data });
 }
 
@@ -138,15 +156,6 @@ export interface CategoryAssignment {
   slot: number; // real Oxatis slot number (1–10)
 }
 
-export function escapeXml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
-
 // Step 1: clear all category slots by sending the product with no Category tags at all.
 // Oxatis may interpret this as "set 0 categories" and wipe all existing slots.
 export async function clearProductCategories(
@@ -171,7 +180,7 @@ export async function updateProductCategories(
   for (let i = 1; i <= 10; i++) {
     if (slotMap.has(i)) {
       const cat = slotMap.get(i)!;
-      catXml += `<Category${i}><OxID>${cat.oxId}</OxID></Category${i}>`;
+      catXml += `<Category${i}><OxID>${escapeXml(cat.oxId)}</OxID></Category${i}>`;
     } else {
       catXml += `<Category${i}><OxID>0</OxID><Name>#null#</Name><Language>fr</Language><ParentOxId>0</ParentOxId></Category${i}>`;
     }
@@ -190,7 +199,8 @@ export async function updateProductCategoriesBySKU(
   categories: CategoryAssignment[]
 ): Promise<string> {
   const catXml = categories
-    .map((cat) => `<Category${cat.slot}><OxID>${cat.oxId}</OxID></Category${cat.slot}>`)
+    .filter((cat) => isValidSlot(cat.slot))
+    .map((cat) => `<Category${cat.slot}><OxID>${escapeXml(cat.oxId)}</OxID></Category${cat.slot}>`)
     .join("");
   const data = `<?xml version="1.0" encoding="utf-8"?><Product ${XML_NS}><ItemSKU>${escapeXml(itemSKU)}</ItemSKU>${catXml}</Product>`;
   return callOxatis({ appId, token, method: "ProductUpdateCategories", data });
@@ -204,9 +214,12 @@ export async function updateSingleSlot(
   slot: number,
   category: CategoryAssignment | null
 ): Promise<string> {
+  if (!isValidSlot(slot)) {
+    throw new Error(`Slot invalide : ${slot} (attendu : entier 1–10)`);
+  }
   let slotXml: string;
   if (category) {
-    slotXml = `<Category${slot}><OxID>${category.oxId}</OxID></Category${slot}>`;
+    slotXml = `<Category${slot}><OxID>${escapeXml(category.oxId)}</OxID></Category${slot}>`;
   } else {
     slotXml = `<Category${slot}><OxID>0</OxID><Name>#null#</Name><Language>fr</Language><ParentOxId>0</ParentOxId></Category${slot}>`;
   }
@@ -268,7 +281,8 @@ export async function updateProductAvailability(
   itemSKU: string,
   dateOfAvailability: string // YYYY-MM-DD ou "" pour effacer
 ): Promise<string> {
-  const dateXml = dateOfAvailability
+  // On n'accepte qu'un format strict YYYY-MM-DD ; toute autre valeur efface la date.
+  const dateXml = /^\d{4}-\d{2}-\d{2}$/.test(dateOfAvailability)
     ? `<DateOfAvailability>${dateOfAvailability}T00:00:00</DateOfAvailability>`
     : `<DateOfAvailability xsi:nil="true" />`;
   const data = `<?xml version="1.0" encoding="utf-8"?><Product ${XML_NS}><ItemSKU>${escapeXml(itemSKU)}</ItemSKU>${dateXml}<Language>fr</Language></Product>`;
