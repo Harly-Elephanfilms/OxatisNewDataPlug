@@ -9,8 +9,15 @@ import {
   ParsedOrder,
   SalesAnalysis,
 } from "@/lib/oxatis-orders";
+import { sleep } from "@/lib/api-helpers";
 
 export const dynamic = "force-dynamic";
+
+// Bornes de sécurité pour éviter une requête à durée de vie illimitée sur de
+// larges plages de dates.
+const MAX_ORDERS = 5000;      // plafond dur sur le nombre de commandes traitées
+const BATCH_SIZE = 5;         // nombre d'appels getOrderDetails concurrents
+const BATCH_DELAY_MS = 100;   // pause entre lots pour ménager l'API Oxatis
 
 function emptyResult(from: string, to: string): SalesAnalysis {
   return {
@@ -53,19 +60,34 @@ export async function GET(request: NextRequest) {
         }
 
         const allIds = await getAllOrderIds(appId, token, from, to);
+
+        // Plafonne le travail : au-delà de MAX_ORDERS on tronque et on le signale.
+        const ids = allIds.slice(0, MAX_ORDERS);
+        const truncated = allIds.length > MAX_ORDERS;
+        if (truncated) {
+          send({ type: "truncated", processed: ids.length, available: allIds.length });
+        }
+
         const orders: ParsedOrder[] = [];
         let done = 0;
         let errors = 0;
 
-        for (const id of allIds) {
-          try {
-            const order = await getOrderDetails(appId, token, id);
-            if (order) orders.push(order);
-          } catch {
-            errors++;
+        // Traitement concurrent par lots plutôt qu'un appel à la fois.
+        for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+          const batch = ids.slice(i, i + BATCH_SIZE);
+          const settled = await Promise.allSettled(
+            batch.map((id) => getOrderDetails(appId, token, id))
+          );
+          for (const r of settled) {
+            if (r.status === "fulfilled") {
+              if (r.value) orders.push(r.value);
+            } else {
+              errors++;
+            }
           }
-          done++;
-          send({ type: "progress", done, total: allIds.length, errors });
+          done += batch.length;
+          send({ type: "progress", done, total: ids.length, errors });
+          if (i + BATCH_SIZE < ids.length) await sleep(BATCH_DELAY_MS);
         }
 
         const result = aggregateOrders(orders, from, to);

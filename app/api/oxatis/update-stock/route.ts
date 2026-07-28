@@ -1,22 +1,30 @@
 import { updateStockBySKU } from "@/lib/oxatis-api";
 import { getCredentials } from "@/lib/server-credentials";
-import { extractXml } from "@/lib/api-helpers";
+import { extractXml, badRequest, toFiniteNumber } from "@/lib/api-helpers";
 import { NextRequest } from "next/server";
 
 export async function POST(request: NextRequest) {
   try {
-    const { appId: bodyAppId, token: bodyToken, items } = await request.json() as {
+    const { appId: bodyAppId, token: bodyToken, items: rawItems } = await request.json() as {
       appId?: string;
       token?: string;
-      items: { itemSKU: string; quantity: number }[];
+      items?: unknown;
     };
     const { appId, token } = getCredentials(request, bodyAppId, bodyToken);
 
-    if (!appId || !token || !items || !Array.isArray(items)) {
-      return Response.json(
-        { error: "AppId, Token et items requis" },
-        { status: 400 }
-      );
+    if (!appId || !token || !Array.isArray(rawItems)) {
+      return badRequest("AppId, Token et items requis");
+    }
+
+    // Validation de chaque entrée : itemSKU (chaîne non vide) + quantity (nombre fini)
+    const items: { itemSKU: string; quantity: number }[] = [];
+    for (const raw of rawItems) {
+      const sku = (raw as { itemSKU?: unknown })?.itemSKU;
+      const qty = toFiniteNumber((raw as { quantity?: unknown })?.quantity);
+      if (typeof sku !== "string" || !sku || qty === null) {
+        return badRequest("Chaque item doit avoir un itemSKU (chaîne) et une quantity (nombre)");
+      }
+      items.push({ itemSKU: sku, quantity: qty });
     }
 
     const results: { success: string[]; errors: string[] } = {
