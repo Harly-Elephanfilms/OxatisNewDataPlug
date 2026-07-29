@@ -10,6 +10,7 @@ import type { ModalTab } from "@/app/articles/hooks/useArticleModal";
 import { useBulkActions } from "@/app/articles/hooks/useBulkActions";
 import { useCredentials } from "@/app/contexts/CredentialsContext";
 import { useCategories } from "@/app/contexts/CategoriesContext";
+import CategoryCsvImportModal from "@/app/articles/components/CategoryCsvImportModal";
 
 function parsePrice(priceStr: string): number {
   const num = parseFloat(priceStr.replace(/[^\d.,]/g, "").replace(",", "."));
@@ -19,6 +20,7 @@ function parsePrice(priceStr: string): number {
 export default function ArticlesPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [csvImportOpen, setCsvImportOpen] = useState(false);
 
   // Data + fetch
   const { articles, setArticles, loading, error: fetchError, fetchArticles } = useArticles();
@@ -74,6 +76,9 @@ export default function ArticlesPage() {
     bulkProgress, setBulkProgress,
     bulkConfirming, setBulkConfirming,
     bulkDate, setBulkDate,
+    bulkReplaceCategories, setBulkReplaceCategories,
+    bulkReplaceExpandedNodes, setBulkReplaceExpandedNodes,
+    toggleBulkReplaceCategory,
     toggleSelectArticle, toggleSelectAll,
     openBulkEdit, executeBulkUpdate,
   } = useBulkActions(filteredArticles, setArticles, setError, setSuccess);
@@ -275,6 +280,71 @@ export default function ArticlesPage() {
     });
   };
 
+  const renderBulkReplaceCategoryTree = (nodes: CategoryNode[], depth: number = 0): React.ReactNode => {
+    return nodes.map((node) => {
+      const isAssigned = bulkReplaceCategories.some((c) => c.oxId === node.oxId);
+      const hasChildren = node.children.length > 0;
+      const isExpanded = bulkReplaceExpandedNodes.has(node.oxId);
+      return (
+        <div key={node.oxId}>
+          <div
+            className="flex items-center gap-2 py-1.5 rounded-md transition-colors cursor-pointer"
+            style={{ paddingLeft: `${depth * 16 + 8}px`, paddingRight: "8px", background: isAssigned ? "var(--primary-light)" : undefined }}
+            onMouseEnter={(e) => { if (!isAssigned) (e.currentTarget as HTMLElement).style.background = "var(--subtle)"; }}
+            onMouseLeave={(e) => { if (!isAssigned) (e.currentTarget as HTMLElement).style.background = ""; }}
+          >
+            {hasChildren ? (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setBulkReplaceExpandedNodes((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(node.oxId)) next.delete(node.oxId);
+                    else next.add(node.oxId);
+                    return next;
+                  });
+                }}
+                className="w-5 h-5 flex items-center justify-center flex-shrink-0"
+                style={{ color: "var(--muted)" }}
+              >
+                <svg className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            ) : (
+              <span className="w-5 flex-shrink-0" />
+            )}
+            <button
+              onClick={() => toggleBulkReplaceCategory(node)}
+              className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0 transition-colors"
+              style={{ border: `2px solid ${isAssigned ? "var(--primary)" : "var(--border)"}`, background: isAssigned ? "var(--primary)" : "#fff", color: "#fff" }}
+            >
+              {isAssigned && (
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              )}
+            </button>
+            <span
+              className="text-sm select-none flex-1"
+              style={{ fontWeight: isAssigned ? 500 : 400, color: isAssigned ? "#3730a3" : "#374151", cursor: "pointer" }}
+              onClick={() => toggleBulkReplaceCategory(node)}
+            >
+              {node.name}
+            </span>
+          </div>
+          {hasChildren && isExpanded && (
+            <div style={{ borderLeft: "2px solid var(--border)", marginLeft: `${depth * 16 + 20}px` }}>
+              <div style={{ marginLeft: "-2px" }}>
+                {renderBulkReplaceCategoryTree(node.children, depth + 1)}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    });
+  };
+
   const stats = useMemo(() => {
     const inStock = articles.filter((a) => a.availability === "in stock").length;
     const outOfStock = articles.filter((a) => a.availability !== "in stock").length;
@@ -387,6 +457,17 @@ export default function ArticlesPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
                   </svg>
                   Rafraîchir
+                </button>
+
+                <button
+                  onClick={() => setCsvImportOpen(true)}
+                  className="btn btn-secondary"
+                  title="Importer des catégories depuis un CSV"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5L7.5 3m0 0L12 7.5M7.5 3v13.5m13.5 0L16.5 21m0 0L12 16.5m4.5 4.5V7.5" />
+                  </svg>
+                  Import catégories
                 </button>
 
                 <button
@@ -1391,6 +1472,13 @@ export default function ArticlesPage() {
         )}
       </main>
 
+      <CategoryCsvImportModal
+        open={csvImportOpen}
+        onClose={() => setCsvImportOpen(false)}
+        articles={articles}
+        categoryTree={categoryTree}
+      />
+
       {/* ── Bulk edit modal ─────────────────────────────────────────────── */}
       {bulkModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -1449,6 +1537,9 @@ export default function ArticlesPage() {
                       style={{ justifyContent: "center", minWidth: 110, ...(bulkAction === "clear" ? { background: "var(--danger)", color: "#fff", borderColor: "var(--danger)" } : {}) }}
                     >
                       Vider slot
+                    </button>
+                    <button onClick={() => setBulkAction("replace")} className={`btn btn-sm flex-1 ${bulkAction === "replace" ? "btn-primary" : "btn-secondary"}`} style={{ justifyContent: "center", minWidth: 130 }}>
+                      Remplacer catégories
                     </button>
                     <button onClick={() => setBulkAction("visible")} className={`btn btn-sm flex-1 ${bulkAction === "visible" ? "btn-primary" : "btn-secondary"}`} style={{ justifyContent: "center", minWidth: 90 }}>
                       Rendre visible
@@ -1527,8 +1618,77 @@ export default function ArticlesPage() {
                     </div>
                   )}
 
+                  {/* Replace categories UI */}
+                  {bulkAction === "replace" && (
+                    <div className="space-y-3">
+                      {/* Assigned list */}
+                      {bulkReplaceCategories.length > 0 && (
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="label uppercase tracking-wide text-xs" style={{ marginBottom: 0 }}>Catégories sélectionnées</span>
+                            <span className="badge badge-indigo" style={{ fontSize: "10px" }}>{bulkReplaceCategories.length}/10</span>
+                          </div>
+                          {[...bulkReplaceCategories].sort((a, b) => a.slot - b.slot).map((cat) => (
+                            <div key={cat.oxId} className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm" style={{ background: "var(--primary-light)", border: "1px solid #c7d2fe" }}>
+                              <select
+                                value={cat.slot}
+                                onChange={(e) => {
+                                  const newSlot = parseInt(e.target.value);
+                                  setBulkReplaceCategories(bulkReplaceCategories.map((c) => {
+                                    if (c.oxId === cat.oxId) return { ...c, slot: newSlot };
+                                    if (c.slot === newSlot) return { ...c, slot: cat.slot };
+                                    return c;
+                                  }));
+                                }}
+                                className="input text-xs w-28 flex-shrink-0"
+                                style={{ padding: "0.2rem 0.4rem", color: "var(--primary)" }}
+                              >
+                                {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                                  <option key={n} value={n}>Slot {n}</option>
+                                ))}
+                              </select>
+                              <span className="font-medium flex-1 text-xs" style={{ color: "#3730a3" }}>{cat.name}</span>
+                              <button
+                                onClick={() => setBulkReplaceCategories(bulkReplaceCategories.filter((c) => c.oxId !== cat.oxId))}
+                                className="btn btn-ghost btn-sm text-gray-300 hover:text-red-500"
+                                style={{ padding: "0.1rem 0.2rem" }}
+                              >
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {/* Tree */}
+                      <div>
+                        <span className="label uppercase tracking-wide text-xs">Arbre des catégories</span>
+                        {loadingTree ? (
+                          <div className="flex items-center gap-2 py-2 text-sm" style={{ color: "var(--muted)" }}>
+                            <span className="spinner spinner-sm" />
+                            Chargement...
+                          </div>
+                        ) : categoryTree.length === 0 ? (
+                          <button onClick={() => fetchCategories(appId, token)} className="w-full btn btn-ghost text-sm" style={{ border: "1px dashed var(--border)", justifyContent: "center", padding: "0.5rem" }}>
+                            Charger l&apos;arbre des catégories
+                          </button>
+                        ) : (
+                          <div className="card max-h-48 overflow-y-auto p-1" style={{ borderRadius: "0.5rem" }}>
+                            {renderBulkReplaceCategoryTree(categoryTree)}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Summary alert */}
                   <div className={`alert ${bulkAction === "clear" || bulkAction === "hidden" || bulkAction === "delete" ? "alert-error" : "alert-info"}`}>
+                    {bulkAction === "replace" && (
+                      bulkReplaceCategories.length === 0
+                        ? `Vider toutes les catégories sur ${selectedIds.size} article${selectedIds.size > 1 ? "s" : ""}`
+                        : `Appliquer ${bulkReplaceCategories.length} catégorie${bulkReplaceCategories.length > 1 ? "s" : ""} sur ${selectedIds.size} article${selectedIds.size > 1 ? "s" : ""}`
+                    )}
                     {bulkAction === "clear" && `Vider le slot ${bulkSlot} sur ${selectedIds.size} article${selectedIds.size > 1 ? "s" : ""}`}
                     {bulkAction === "add" && (bulkSelectedCategory
                       ? `Assigner "${bulkSelectedCategory.name}" au slot ${bulkSlot} sur ${selectedIds.size} article${selectedIds.size > 1 ? "s" : ""}`

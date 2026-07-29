@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import type { Article } from "@/lib/types";
 import type { CategoryNode } from "@/lib/types";
+import type { CategoryAssignment } from "@/lib/oxatis-api";
 import { sleep } from "@/lib/api-helpers";
 
 export function useBulkActions(
@@ -14,7 +15,7 @@ export function useBulkActions(
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkModalOpen, setBulkModalOpen] = useState(false);
   const [bulkAction, setBulkAction] = useState<
-    "add" | "clear" | "visible" | "hidden" | "availability" | "delete"
+    "add" | "clear" | "visible" | "hidden" | "availability" | "delete" | "replace"
   >("add");
   const [bulkSlot, setBulkSlot] = useState(1);
   const [bulkSelectedCategory, setBulkSelectedCategory] = useState<CategoryNode | null>(null);
@@ -26,6 +27,8 @@ export function useBulkActions(
   } | null>(null);
   const [bulkConfirming, setBulkConfirming] = useState(false);
   const [bulkDate, setBulkDate] = useState("");
+  const [bulkReplaceCategories, setBulkReplaceCategories] = useState<CategoryAssignment[]>([]);
+  const [bulkReplaceExpandedNodes, setBulkReplaceExpandedNodes] = useState<Set<string>>(new Set());
 
   const toggleSelectArticle = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -49,6 +52,20 @@ export function useBulkActions(
     setBulkConfirming(false);
     setBulkSelectedCategory(null);
     setBulkExpandedNodes(new Set());
+    setBulkReplaceCategories([]);
+    setBulkReplaceExpandedNodes(new Set());
+  }, []);
+
+  const toggleBulkReplaceCategory = useCallback((node: CategoryNode) => {
+    setBulkReplaceCategories((prev) => {
+      const exists = prev.some((c) => c.oxId === node.oxId);
+      if (exists) return prev.filter((c) => c.oxId !== node.oxId);
+      if (prev.length >= 10) return prev;
+      const usedSlots = new Set(prev.map((c) => c.slot));
+      let nextSlot = 1;
+      while (usedSlots.has(nextSlot)) nextSlot++;
+      return [...prev, { oxId: node.oxId, name: node.name, parentOxId: node.parentOxId, slot: nextSlot }];
+    });
   }, []);
 
   const executeBulkUpdate = useCallback(async () => {
@@ -85,6 +102,9 @@ export function useBulkActions(
         } else if (bulkAction === "delete") {
           url = "/api/oxatis/delete-product";
           body = { oxatisId: id };
+        } else if (bulkAction === "replace") {
+          url = "/api/oxatis/product-categories";
+          body = { oxatisId: id, categories: bulkReplaceCategories };
         }
 
         const response = await fetch(url, {
@@ -123,7 +143,7 @@ export function useBulkActions(
 
     void setError;
     void setSuccess;
-  }, [selectedIds, bulkAction, bulkSelectedCategory, bulkSlot, bulkDate, setArticles, setError, setSuccess]);
+  }, [selectedIds, bulkAction, bulkSelectedCategory, bulkSlot, bulkDate, bulkReplaceCategories, setArticles, setError, setSuccess]);
 
   return {
     selectedIds,
@@ -144,6 +164,11 @@ export function useBulkActions(
     setBulkConfirming,
     bulkDate,
     setBulkDate,
+    bulkReplaceCategories,
+    setBulkReplaceCategories,
+    bulkReplaceExpandedNodes,
+    setBulkReplaceExpandedNodes,
+    toggleBulkReplaceCategory,
     toggleSelectArticle,
     toggleSelectAll,
     openBulkEdit,
