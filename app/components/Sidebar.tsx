@@ -157,7 +157,7 @@ export default function Sidebar() {
             </div>
             <div>
               <p className="text-white font-semibold text-sm leading-tight">Elephant Films</p>
-              <p style={{ color: "#a5b4fc", fontSize: "0.7rem" }}>Outils Oxatis</p>
+              <p style={{ color: "var(--muted)", fontSize: "0.7rem" }}>Outils Oxatis</p>
             </div>
           </div>
           <button

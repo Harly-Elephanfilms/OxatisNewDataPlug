@@ -1,44 +1,43 @@
 @import "tailwindcss";
 
-/* ─── Ghost in the Shell — Design tokens ────────────────────────────────── */
+/* ─── Design tokens ──────────────────────────────────────────────────────── */
 :root {
   /* Backgrounds */
-  --background:    #04090f;
-  --bg-surface:    #070d16;
-  --bg-panel:      #090e1a;
-  --bg-elevated:   #0d1624;
+  --background:    #0a0a0a;
+  --bg-surface:    #111111;
+  --bg-panel:      #161616;
+  --bg-elevated:   #1c1c1c;
 
-  --foreground:    #c8dff0;
+  --foreground:    #ededed;
 
   --topbar-height: 56px;
 
-  /* Primary — cyan */
-  --primary:       #00c8e8;
-  --primary-hover: #00a8c8;
-  --primary-light: rgba(0, 200, 232, 0.10);
-  --primary-glow:  0 0 14px rgba(0, 200, 232, 0.35);
+  /* Primary — indigo */
+  --primary:       #6366f1;
+  --primary-hover: #4f46e5;
+  --primary-light: rgba(99, 102, 241, 0.12);
 
   /* Status */
-  --success:       #00e87a;
-  --success-light: rgba(0, 232, 122, 0.08);
-  --warning:       #ffaa00;
-  --warning-light: rgba(255, 170, 0, 0.08);
-  --danger:        #ff2d55;
-  --danger-light:  rgba(255, 45, 85, 0.08);
+  --success:       #22c55e;
+  --success-light: rgba(34, 197, 94, 0.10);
+  --warning:       #f59e0b;
+  --warning-light: rgba(245, 158, 11, 0.10);
+  --danger:        #ef4444;
+  --danger-light:  rgba(239, 68, 68, 0.10);
 
   /* Borders */
-  --border:        #142030;
-  --border-bright: #1e3a52;
+  --border:        rgba(255, 255, 255, 0.07);
+  --border-bright: rgba(255, 255, 255, 0.12);
 
-  /* Cards / panels */
-  --card-bg:       #090e1a;
-  --muted:         #3a5a78;
-  --subtle:        #0d1624;
+  /* Surfaces */
+  --card-bg:       #111111;
+  --muted:         #737373;
+  --subtle:        #161616;
 
   /* Text */
-  --text-bright:   #deeeff;
-  --text-main:     #7aaccc;
-  --text-dim:      #3a5a78;
+  --text-bright:   #f5f5f5;
+  --text-main:     #a3a3a3;
+  --text-dim:      #525252;
 }
 
 @theme inline {
@@ -67,22 +66,6 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Scan lines — subtle GitS effect */
-body::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  background: repeating-linear-gradient(
-    to bottom,
-    transparent 0px,
-    transparent 3px,
-    rgba(0, 0, 0, 0.06) 3px,
-    rgba(0, 0, 0, 0.06) 4px
-  );
-  pointer-events: none;
-  z-index: 9999;
-}
-
 /* ─── Top bar layout ─────────────────────────────────────────────────────── */
 .app-topbar {
   position: fixed;
@@ -90,14 +73,15 @@ body::after {
   left: 0;
   right: 0;
   height: var(--topbar-height);
-  background: #040810;
+  background: rgba(10, 10, 10, 0.85);
   border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   display: flex;
   align-items: center;
   gap: 0.75rem;
   padding: 0 1.25rem;
   z-index: 50;
-  box-shadow: 0 0 24px rgba(0,0,0,0.6), 0 1px 0 rgba(0,200,232,0.08);
 }
 
 .app-main {
@@ -116,7 +100,7 @@ body::after {
   width: 36px;
   height: 36px;
   padding: 6px;
-  border-radius: 4px;
+  border-radius: 6px;
   background: transparent;
   border: none;
   cursor: pointer;
@@ -124,13 +108,13 @@ body::after {
   transition: background 0.15s ease;
 }
 .topbar-burger:hover {
-  background: rgba(0, 200, 232, 0.08);
+  background: rgba(255, 255, 255, 0.06);
 }
 .burger-line {
   display: block;
   width: 100%;
   height: 1.5px;
-  background: var(--primary);
+  background: var(--text-main);
   border-radius: 2px;
 }
 
@@ -144,8 +128,8 @@ body::after {
 .topbar-brand-icon {
   width: 30px;
   height: 30px;
-  border-radius: 4px;
-  background: linear-gradient(135deg, #007a9e 0%, #00c8e8 100%);
+  border-radius: 7px;
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -163,8 +147,7 @@ body::after {
   font-size: 0.65rem;
   display: block;
   line-height: 1;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 /* Current page in topbar */
@@ -173,14 +156,13 @@ body::after {
   align-items: center;
   gap: 0.5rem;
   margin-left: auto;
-  color: var(--primary);
+  color: var(--text-main);
   font-size: 0.8125rem;
   font-weight: 500;
-  letter-spacing: 0.04em;
 }
 .topbar-page-icon {
   display: flex;
-  opacity: 0.7;
+  opacity: 0.6;
 }
 .topbar-page-label {
   display: none;
@@ -193,7 +175,7 @@ body::after {
 .nav-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(4px);
   z-index: 60;
   animation: fadeIn 0.15s ease;
@@ -208,15 +190,14 @@ body::after {
   top: 0;
   left: 0;
   height: 100vh;
-  width: 260px;
-  background: #040810;
+  width: 256px;
+  background: #0f0f0f;
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   z-index: 70;
   transform: translateX(-100%);
   transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 4px 0 32px rgba(0, 200, 232, 0.05);
 }
 .nav-drawer-open {
   transform: translateX(0);
@@ -237,7 +218,7 @@ body::after {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
+  border-radius: 6px;
   background: transparent;
   border: none;
   color: var(--muted);
@@ -245,8 +226,8 @@ body::after {
   transition: background 0.15s ease, color 0.15s ease;
 }
 .drawer-close:hover {
-  background: rgba(0, 200, 232, 0.08);
-  color: var(--primary);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-bright);
 }
 
 .drawer-nav {
@@ -257,23 +238,21 @@ body::after {
 
 .drawer-section-label {
   font-size: 0.6rem;
-  font-weight: 700;
-  letter-spacing: 0.15em;
+  font-weight: 600;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--primary);
+  color: var(--text-dim);
   padding-left: 0.75rem;
   margin-bottom: 0.5rem;
-  opacity: 0.7;
 }
 
 .drawer-footer {
   padding: 1rem 1.25rem;
   border-top: 1px solid var(--border);
   font-size: 0.7rem;
-  color: var(--muted);
+  color: var(--text-dim);
   text-align: center;
   font-family: var(--font-geist-mono);
-  letter-spacing: 0.05em;
 }
 
 /* ─── Scrollbar ──────────────────────────────────────────────────────────── */
@@ -282,54 +261,29 @@ body::after {
   height: 4px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--bg-surface);
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--border-bright);
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 99px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--muted);
+  background: rgba(255, 255, 255, 0.2);
 }
 
-/* ─── Corner-bracket panels ──────────────────────────────────────────────── */
+/* ─── Cards ──────────────────────────────────────────────────────────────── */
 .card {
   background: var(--card-bg);
   border: 1px solid var(--border);
-  border-radius: 4px;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
-
-  /* corner brackets via background gradients */
-  background-image:
-    linear-gradient(var(--primary), var(--primary)),
-    linear-gradient(var(--primary), var(--primary)),
-    linear-gradient(var(--primary), var(--primary)),
-    linear-gradient(var(--primary), var(--primary)),
-    linear-gradient(var(--primary), var(--primary)),
-    linear-gradient(var(--primary), var(--primary)),
-    linear-gradient(var(--primary), var(--primary)),
-    linear-gradient(var(--primary), var(--primary));
-  background-size:
-    10px 1.5px, 1.5px 10px,
-    10px 1.5px, 1.5px 10px,
-    10px 1.5px, 1.5px 10px,
-    10px 1.5px, 1.5px 10px;
-  background-position:
-    top left,    top left,
-    top right,   top right,
-    bottom left, bottom left,
-    bottom right,bottom right;
-  background-repeat: no-repeat;
-  background-color: var(--card-bg);
+  border-radius: 10px;
 }
 
 .card-hover {
-  transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+  transition: border-color 0.2s ease, background 0.2s ease;
 }
 .card-hover:hover {
-  border-color: rgba(0, 200, 232, 0.3);
-  box-shadow: 0 0 20px rgba(0, 200, 232, 0.06), inset 0 1px 0 rgba(255,255,255,0.03);
-  transform: translateY(-1px);
+  border-color: rgba(99, 102, 241, 0.3);
+  background: #131313;
 }
 
 /* ─── Buttons ────────────────────────────────────────────────────────────── */
@@ -338,36 +292,32 @@ body::after {
   align-items: center;
   gap: 0.5rem;
   font-size: 0.8125rem;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1;
   padding: 0.5rem 1rem;
-  border-radius: 3px;
+  border-radius: 7px;
   border: 1px solid transparent;
   cursor: pointer;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   transition: all 0.15s ease;
   white-space: nowrap;
   text-decoration: none;
 }
 .btn:focus-visible {
-  outline: 1px solid var(--primary);
+  outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
 .btn:disabled {
-  opacity: 0.35;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
 .btn-primary {
-  background: rgba(0, 200, 232, 0.12);
-  color: var(--primary);
-  border-color: rgba(0, 200, 232, 0.4);
+  background: var(--primary);
+  color: #fff;
+  border-color: transparent;
 }
 .btn-primary:hover:not(:disabled) {
-  background: rgba(0, 200, 232, 0.2);
-  border-color: var(--primary);
-  box-shadow: var(--primary-glow);
+  background: var(--primary-hover);
 }
 
 .btn-secondary {
@@ -376,19 +326,17 @@ body::after {
   border-color: var(--border-bright);
 }
 .btn-secondary:hover:not(:disabled) {
-  background: #142030;
-  border-color: var(--muted);
+  background: #222222;
   color: var(--text-bright);
 }
 
 .btn-danger {
-  background: rgba(255, 45, 85, 0.10);
+  background: rgba(239, 68, 68, 0.12);
   color: var(--danger);
-  border-color: rgba(255, 45, 85, 0.35);
+  border-color: rgba(239, 68, 68, 0.3);
 }
 .btn-danger:hover:not(:disabled) {
-  background: rgba(255, 45, 85, 0.18);
-  box-shadow: 0 0 12px rgba(255, 45, 85, 0.25);
+  background: rgba(239, 68, 68, 0.2);
 }
 
 .btn-ghost {
@@ -397,7 +345,7 @@ body::after {
   border-color: transparent;
 }
 .btn-ghost:hover:not(:disabled) {
-  background: rgba(255,255,255,0.04);
+  background: rgba(255, 255, 255, 0.05);
   color: var(--text-main);
 }
 
@@ -415,20 +363,18 @@ body::after {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  font-size: 0.6rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 0.7rem;
+  font-weight: 500;
   padding: 0.2rem 0.5rem;
-  border-radius: 2px;
+  border-radius: 4px;
   white-space: nowrap;
 }
-.badge-indigo  { background: rgba(0, 200, 232, 0.10); color: var(--primary); border: 1px solid rgba(0, 200, 232, 0.25); }
-.badge-green   { background: rgba(0, 232, 122, 0.10); color: var(--success); border: 1px solid rgba(0, 232, 122, 0.25); }
-.badge-red     { background: rgba(255, 45, 85, 0.10);  color: var(--danger);  border: 1px solid rgba(255, 45, 85, 0.25); }
-.badge-amber   { background: rgba(255, 170, 0, 0.10);  color: var(--warning); border: 1px solid rgba(255, 170, 0, 0.25); }
-.badge-slate   { background: rgba(255,255,255,0.05);    color: var(--muted);   border: 1px solid var(--border); }
-.badge-purple  { background: rgba(139, 92, 246, 0.10); color: #a78bfa;        border: 1px solid rgba(139, 92, 246, 0.25); }
+.badge-indigo  { background: rgba(99, 102, 241, 0.12); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.2); }
+.badge-green   { background: rgba(34, 197, 94, 0.10);  color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.2); }
+.badge-red     { background: rgba(239, 68, 68, 0.10);  color: #f87171; border: 1px solid rgba(239, 68, 68, 0.2); }
+.badge-amber   { background: rgba(245, 158, 11, 0.10); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.2); }
+.badge-slate   { background: rgba(255, 255, 255, 0.05); color: var(--muted); border: 1px solid var(--border); }
+.badge-purple  { background: rgba(168, 85, 247, 0.10); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.2); }
 
 /* ─── Form inputs ────────────────────────────────────────────────────────── */
 .input {
@@ -439,14 +385,14 @@ body::after {
   color: var(--text-bright);
   background: var(--bg-surface);
   border: 1px solid var(--border-bright);
-  border-radius: 3px;
+  border-radius: 7px;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
   outline: none;
-  font-family: var(--font-geist-mono);
+  font-family: inherit;
 }
 .input:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(0, 200, 232, 0.15);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
 }
 .input::placeholder {
   color: var(--text-dim);
@@ -458,18 +404,16 @@ body::after {
 
 .label {
   display: block;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-main);
   margin-bottom: 0.375rem;
 }
 
 /* ─── Table ──────────────────────────────────────────────────────────────── */
 .table-wrapper {
   overflow-x: auto;
-  border-radius: 4px;
+  border-radius: 8px;
   border: 1px solid var(--border);
 }
 .data-table {
@@ -486,29 +430,23 @@ body::after {
 .data-table thead th {
   padding: 0.625rem 0.875rem;
   text-align: left;
-  font-size: 0.65rem;
-  font-weight: 700;
-  color: var(--primary);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-main);
+  letter-spacing: 0.03em;
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
+  text-transform: uppercase;
 }
 .data-table tbody tr {
-  border-bottom: 1px solid rgba(255,255,255,0.03);
+  border-bottom: 1px solid var(--border);
   transition: background 0.1s ease;
 }
 .data-table tbody tr:last-child {
   border-bottom: none;
 }
 .data-table tbody tr:hover {
-  background: rgba(0, 200, 232, 0.04);
-}
-.data-table tbody tr:nth-child(even) {
-  background: rgba(255,255,255,0.015);
-}
-.data-table tbody tr:nth-child(even):hover {
-  background: rgba(0, 200, 232, 0.04);
+  background: rgba(255, 255, 255, 0.025);
 }
 .data-table td {
   padding: 0.625rem 0.875rem;
@@ -522,19 +460,19 @@ body::after {
   align-items: flex-start;
   gap: 0.75rem;
   padding: 0.75rem 1rem;
-  border-radius: 3px;
+  border-radius: 8px;
   font-size: 0.8125rem;
-  border-left: 2px solid;
+  border: 1px solid;
 }
-.alert-success { background: var(--success-light); color: var(--success); border-color: var(--success); }
-.alert-error   { background: var(--danger-light);  color: var(--danger);  border-color: var(--danger); }
-.alert-warning { background: var(--warning-light); color: var(--warning); border-color: var(--warning); }
-.alert-info    { background: var(--primary-light); color: var(--primary); border-color: var(--primary); }
+.alert-success { background: var(--success-light); color: #4ade80; border-color: rgba(34, 197, 94, 0.2); }
+.alert-error   { background: var(--danger-light);  color: #f87171; border-color: rgba(239, 68, 68, 0.2); }
+.alert-warning { background: var(--warning-light); color: #fbbf24; border-color: rgba(245, 158, 11, 0.2); }
+.alert-info    { background: var(--primary-light); color: #818cf8; border-color: rgba(99, 102, 241, 0.2); }
 
 /* ─── Section headers ────────────────────────────────────────────────────── */
 .section-title {
   font-size: 1rem;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-bright);
   letter-spacing: -0.01em;
 }
@@ -542,7 +480,6 @@ body::after {
   font-size: 0.8rem;
   color: var(--muted);
   margin-top: 0.25rem;
-  letter-spacing: 0.02em;
 }
 
 /* ─── Spinner ────────────────────────────────────────────────────────────── */
@@ -553,7 +490,7 @@ body::after {
   display: inline-block;
   width: 1.25rem;
   height: 1.25rem;
-  border: 1.5px solid var(--border-bright);
+  border: 2px solid var(--border-bright);
   border-top-color: var(--primary);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
@@ -565,7 +502,6 @@ body::after {
 .spinner-lg {
   width: 2rem;
   height: 2rem;
-  border-width: 2px;
 }
 
 /* ─── Divider ────────────────────────────────────────────────────────────── */
@@ -580,24 +516,12 @@ body::after {
   padding: 1.25rem 1.5rem;
   background: var(--bg-surface);
   border-bottom: 1px solid var(--border);
-  position: relative;
-}
-.page-header::before {
-  content: "";
-  position: absolute;
-  bottom: -1px;
-  left: 0;
-  width: 80px;
-  height: 1px;
-  background: var(--primary);
-  box-shadow: 0 0 8px var(--primary);
 }
 .page-header h1 {
   font-size: 1.125rem;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-bright);
-  letter-spacing: -0.01em;
-  text-transform: uppercase;
+  letter-spacing: -0.02em;
 }
 .page-content {
   padding: 1.5rem;
@@ -616,22 +540,8 @@ body::after {
   }
 }
 
-/* ─── HUD glow text ──────────────────────────────────────────────────────── */
+/* ─── Utility ────────────────────────────────────────────────────────────── */
 .text-hud {
   color: var(--primary);
   font-family: var(--font-geist-mono);
-  letter-spacing: 0.05em;
-}
-.text-hud-bright {
-  color: var(--text-bright);
-  text-shadow: 0 0 8px rgba(0, 200, 232, 0.3);
-}
-
-/* ─── Glow pulse animation ───────────────────────────────────────────────── */
-@keyframes glow-pulse {
-  0%, 100% { box-shadow: 0 0 4px rgba(0, 200, 232, 0.3); }
-  50%       { box-shadow: 0 0 12px rgba(0, 200, 232, 0.6); }
-}
-.glow-pulse {
-  animation: glow-pulse 2s ease-in-out infinite;
 }
