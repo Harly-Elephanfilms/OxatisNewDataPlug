@@ -26,8 +26,8 @@ const tools: Tool[] = [
         <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
       </svg>
     ),
-    accentColor: "#6366f1",
-    accentBg: "#eef2ff",
+    accentColor: "#818cf8",
+    accentBg: "rgba(99, 102, 241, 0.12)",
     badge: "Disponible",
     badgeClass: "badge badge-indigo",
     available: true,
@@ -43,8 +43,8 @@ const tools: Tool[] = [
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z" />
       </svg>
     ),
-    accentColor: "#7c3aed",
-    accentBg: "#faf5ff",
+    accentColor: "#c084fc",
+    accentBg: "rgba(168, 85, 247, 0.12)",
     badge: "Disponible",
     badgeClass: "badge badge-purple",
     available: true,
@@ -60,8 +60,8 @@ const tools: Tool[] = [
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
     ),
-    accentColor: "#16a34a",
-    accentBg: "#f0fdf4",
+    accentColor: "#4ade80",
+    accentBg: "rgba(34, 197, 94, 0.10)",
     badge: "Disponible",
     badgeClass: "badge badge-green",
     available: true,
@@ -77,8 +77,8 @@ const tools: Tool[] = [
         <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m.75 12l3 3m0 0l3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
       </svg>
     ),
-    accentColor: "#0891b2",
-    accentBg: "#ecfeff",
+    accentColor: "#22d3ee",
+    accentBg: "rgba(6, 182, 212, 0.10)",
     badge: "Disponible",
     badgeClass: "badge badge-indigo",
     available: true,
@@ -94,8 +94,8 @@ const tools: Tool[] = [
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
       </svg>
     ),
-    accentColor: "#d97706",
-    accentBg: "#fffbeb",
+    accentColor: "#fbbf24",
+    accentBg: "rgba(245, 158, 11, 0.10)",
     badge: "Disponible",
     badgeClass: "badge badge-amber",
     available: true,
@@ -212,10 +212,10 @@ export default function Home() {
           <p
             style={{
               fontSize: "0.6875rem",
-              fontWeight: 700,
-              letterSpacing: "0.1em",
+              fontWeight: 600,
+              letterSpacing: "0.08em",
               textTransform: "uppercase",
-              color: "#94a3b8",
+              color: "var(--text-dim)",
               marginBottom: "1rem",
             }}
           >
@@ -278,7 +278,7 @@ export default function Home() {
                     <p
                       style={{
                         fontSize: "0.8125rem",
-                        color: "#64748b",
+                        color: "var(--text-main)",
                         margin: "0 0 0.5rem",
                         fontWeight: 500,
                       }}
@@ -288,7 +288,7 @@ export default function Home() {
                     <p
                       style={{
                         fontSize: "0.8rem",
-                        color: "#94a3b8",
+                        color: "var(--muted)",
                         margin: 0,
                         lineHeight: 1.55,
                       }}
@@ -348,7 +348,6 @@ export default function Home() {
             display: "flex",
             alignItems: "center",
             gap: "0.875rem",
-            background: "#f8fafc",
           }}
         >
           <div
@@ -356,7 +355,7 @@ export default function Home() {
               width: 32,
               height: 32,
               borderRadius: 8,
-              background: "#eef2ff",
+              background: "rgba(99, 102, 241, 0.12)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -364,7 +363,7 @@ export default function Home() {
             }}
           >
             <svg
-              style={{ width: 16, height: 16, color: "#6366f1" }}
+              style={{ width: 16, height: 16, color: "#818cf8" }}
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -374,10 +373,10 @@ export default function Home() {
             </svg>
           </div>
           <div>
-            <p style={{ fontSize: "0.8125rem", fontWeight: 600, color: "#374151", margin: 0 }}>
+            <p style={{ fontSize: "0.8125rem", fontWeight: 500, color: "var(--text-bright)", margin: 0 }}>
               Outil interne — elephantfilms.com
             </p>
-            <p style={{ fontSize: "0.75rem", color: "#94a3b8", margin: "0.1rem 0 0" }}>
+            <p style={{ fontSize: "0.75rem", color: "var(--muted)", margin: "0.1rem 0 0" }}>
               Les credentials API Oxatis sont stockés dans une session sécurisée (cookie httpOnly).
             </p>
           </div>
