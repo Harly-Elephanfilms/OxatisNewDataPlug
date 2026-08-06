@@ -59,7 +59,12 @@ export function useSalesAnalysis(): UseSalesAnalysis {
     );
     sourceRef.current = source;
 
+    // Devient true dès qu'un message est reçu : distingue un 401 immédiat
+    // (aucun message) d'une coupure en cours d'analyse.
+    let gotMessage = false;
+
     source.onmessage = (e: MessageEvent) => {
+      gotMessage = true;
       let payload: {
         type: string;
         count?: number;
@@ -102,7 +107,14 @@ export function useSalesAnalysis(): UseSalesAnalysis {
     };
 
     source.onerror = () => {
-      setError("Connexion interrompue. Vérifiez vos credentials et réessayez.");
+      // EventSource ne donne pas le code HTTP ; un échec immédiat sans message
+      // reçu vient quasi toujours d'un 401 (identifiants absents/invalides ou
+      // session expirée).
+      setError(
+        gotMessage
+          ? "Connexion interrompue avant la fin de l'analyse. Réessayez."
+          : "Identifiants Oxatis manquants ou invalides (ou session expirée). Configurez-les puis réessayez."
+      );
       setStatus("error");
       source.close();
     };
