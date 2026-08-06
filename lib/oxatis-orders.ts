@@ -72,7 +72,9 @@ export function parseOrderIds(xml: string): string[] {
   const block = xml.match(/<OrderIDs>([\s\S]*?)<\/OrderIDs>/);
   if (!block) return [];
   const ids: string[] = [];
-  const re = /<OrderID>(\d+)<\/OrderID>/g;
+  // Oxatis renvoie <OrderID><OxID>123</OxID></OrderID> (imbriqué). On accepte
+  // aussi la forme plate <OrderID>123</OrderID> par robustesse.
+  const re = /<OrderID>\s*(?:<OxID>\s*)?(\d+)\s*(?:<\/OxID>\s*)?<\/OrderID>/gi;
   let m: RegExpExecArray | null;
   while ((m = re.exec(block[1])) !== null) ids.push(m[1]);
   return ids;
@@ -180,7 +182,7 @@ export async function getOrderCount(
   from: string,
   to: string
 ): Promise<number> {
-  const data = `<?xml version="1.0" encoding="utf-8"?><Orders ${XML_NS}><StartDate>${from}T00:00:00</StartDate><EndDate>${to}T23:59:59</EndDate></Orders>`;
+  const data = `<?xml version="1.0" encoding="utf-8"?><OrderList ${XML_NS}><OrderDateStart>${from}T00:00:00</OrderDateStart><OrderDateEnd>${to}T23:59:59</OrderDateEnd></OrderList>`;
   const xml = await callOrderApi(appId, token, "OrderCount", data);
   return parseOrderCount(xml);
 }
@@ -196,7 +198,7 @@ export async function getAllOrderIds(
   let totalPages = 1;
 
   do {
-    const data = `<?xml version="1.0" encoding="utf-8"?><Orders ${XML_NS}><StartDate>${from}T00:00:00</StartDate><EndDate>${to}T23:59:59</EndDate><PageNumber>${page}</PageNumber><PageSize>100</PageSize></Orders>`;
+    const data = `<?xml version="1.0" encoding="utf-8"?><OrderList ${XML_NS}><PageInformation><PageNumber>${page}</PageNumber><PageSize>100</PageSize></PageInformation><OrderDateStart>${from}T00:00:00</OrderDateStart><OrderDateEnd>${to}T23:59:59</OrderDateEnd></OrderList>`;
     const xml = await callOrderApi(appId, token, "OrderGetList", data);
     allIds.push(...parseOrderIds(xml));
     totalPages = parseTotalPages(xml);
