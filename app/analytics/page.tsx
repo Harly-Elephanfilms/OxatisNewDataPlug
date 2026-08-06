@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import type { Article } from "@/lib/types";
+import { useCredentials } from "@/app/contexts/CredentialsContext";
 import { useSalesAnalysis } from "./hooks/useSalesAnalysis";
 import { SalesDatePicker } from "./components/SalesDatePicker";
 import { SalesProgress } from "./components/SalesProgress";
@@ -28,6 +29,7 @@ export default function AnalyticsPage() {
   const [brandSort, setBrandSort] = useState<BrandSort>("count");
   const [brandSearch, setBrandSearch] = useState("");
   const [activeTab, setActiveTab] = useState<"catalogue" | "ventes">("catalogue");
+  const { serverHasCredentials } = useCredentials();
   const { status, progress, result, truncated, error: salesError, analyze } = useSalesAnalysis();
 
   const fetchData = async () => {
@@ -409,9 +411,18 @@ export default function AnalyticsPage() {
 
         {activeTab === "ventes" && (
           <div>
+            {/* Identifiants requis */}
+            {!serverHasCredentials && (
+              <div className="alert alert-warning" style={{ marginBottom: "1.5rem" }}>
+                Identifiants Oxatis non configurés. Renseignez votre AppId et Token sur la page{" "}
+                <a href="/stock" style={{ fontWeight: 700, textDecoration: "underline", color: "inherit" }}>Stock Manager</a>{" "}
+                avant de lancer une analyse des ventes.
+              </div>
+            )}
+
             {/* Sélecteur de période */}
             <div style={{ marginBottom: "1.5rem" }}>
-              <SalesDatePicker onAnalyze={analyze} disabled={status === "loading"} />
+              <SalesDatePicker onAnalyze={analyze} disabled={status === "loading" || !serverHasCredentials} />
             </div>
 
             {/* Erreur */}
