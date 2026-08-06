@@ -26,7 +26,12 @@ describe("parseOrderCount", () => {
 });
 
 describe("parseOrderIds", () => {
-  it("extrait tous les IDs de commande", () => {
+  it("extrait tous les IDs de commande (forme imbriquée Oxatis)", () => {
+    const xml = `<OrderList><OrderIDs><OrderID><OxID>101</OxID></OrderID><OrderID><OxID>102</OxID></OrderID></OrderIDs></OrderList>`;
+    expect(parseOrderIds(xml)).toEqual(["101", "102"]);
+  });
+
+  it("extrait aussi la forme plate", () => {
     const xml = `<OrderList><OrderIDs><OrderID>101</OrderID><OrderID>102</OrderID></OrderIDs></OrderList>`;
     expect(parseOrderIds(xml)).toEqual(["101", "102"]);
   });
