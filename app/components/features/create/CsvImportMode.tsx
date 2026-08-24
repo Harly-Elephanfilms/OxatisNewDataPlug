@@ -22,6 +22,7 @@ interface CsvImportRow {
   brand: string;
   stock: string;
   description: string;
+  descriptionLong: string;
   characteristics: string;
   categoryEntries: CategoryEntry[];
   valid: boolean;
@@ -88,7 +89,7 @@ function detectColumns(headers: string[]): ColMap {
     else if (["ean", "barcode", "gtin", "codeean", "codebarre", "codebarres"].includes(c)) m.ean = i;
     else if (["marque", "brand", "fabricant", "manufacturer", "editeur"].includes(c)) m.brand = i;
     else if (["stock", "quantite", "quantity", "qty", "qte", "qt"].includes(c)) m.stock = i;
-    else if (["descriptiondetaillee", "descriptiondetail", "detaillee"].includes(c)) m.descriptionDetail = i;
+    else if (["descriptiondetaillee", "descriptiondetail", "detaillee", "descriptionlongue", "longdescription"].includes(c)) m.descriptionDetail = i;
     else if (["description", "desc", "details", "detail"].includes(c)) m.description = i;
     else if (["caracteristiques", "caracteristique", "features", "feature", "attributs"].includes(c)) m.characteristics = i;
     // Colonnes catégories Oxatis : "Nom de la Xème catégorie" — on déduit le slot du nom
@@ -142,10 +143,12 @@ function buildRows(rawRows: string[][], colMap: ColMap): CsvImportRow[] {
     const v = colMap[key];
     return typeof v === "number" ? v : undefined;
   };
-  // String() sécurise les cellules xlsx qui peuvent être des numbers
+  // String() sécurise les cellules xlsx qui peuvent être des numbers.
+  // Pas de suppression des guillemets : Papaparse/XLSX les ont déjà déséchappés,
+  // et les retirer mutilerait les citations du texte (ex. description détaillée).
   const get = (row: string[], key: string) => {
     const idx = getIdx(key);
-    return idx !== undefined ? String(row[idx] ?? "").replace(/"/g, "").trim() : "";
+    return idx !== undefined ? String(row[idx] ?? "").trim() : "";
   };
 
   return rawRows.map((row) => {
@@ -163,7 +166,7 @@ function buildRows(rawRows: string[][], colMap: ColMap): CsvImportRow[] {
     const catColDefs = (colMap.categoryNameCols as CategoryColDef[]) ?? [];
     const categoryEntries: CategoryEntry[] = catColDefs
       .map(({ colIdx, slot }) => {
-        const name = String(row[colIdx] ?? "").replace(/"/g, "").trim();
+        const name = String(row[colIdx] ?? "").trim();
         return name ? { name, slot } : null;
       })
       .filter((e): e is CategoryEntry => e !== null);
@@ -176,7 +179,8 @@ function buildRows(rawRows: string[][], colMap: ColMap): CsvImportRow[] {
       ean: get(row, "ean"),
       brand: get(row, "brand"),
       stock: get(row, "stock") || "0",
-      description: get(row, "descriptionDetail") || get(row, "description"),
+      description: get(row, "description"),
+      descriptionLong: get(row, "descriptionDetail"),
       characteristics: get(row, "characteristics"),
       categoryEntries,
       valid: false,
@@ -405,6 +409,7 @@ export default function CsvImportMode({
               brand: row.brand || undefined,
               ean: row.ean || undefined,
               description: row.description || undefined,
+              descriptionLong: row.descriptionLong || undefined,
               features: features?.length ? features : undefined,
               categories: categories?.length ? categories : undefined,
             },

@@ -13,6 +13,7 @@ interface ProductFormData {
   tva: string;
   stock: string;
   description: string;
+  descriptionLong: string;
   brand: string;
   ean: string;
   weight: string;
@@ -35,6 +36,7 @@ const INITIAL_FORM: ProductFormData = {
   tva: "20",
   stock: "0",
   description: "",
+  descriptionLong: "",
   brand: "",
   ean: "",
   weight: "",
@@ -186,6 +188,7 @@ export default function ProductForm({
             tva: parseFloat(form.tva),
             stock: parseInt(form.stock) || 0,
             description: form.description.trim() || undefined,
+            descriptionLong: form.descriptionLong.trim() || undefined,
             brand: form.brand.trim() || undefined,
             ean: form.ean.trim() || undefined,
             weight: parseFloat(form.weight.replace(",", ".")) || undefined,
@@ -573,15 +576,29 @@ export default function ProductForm({
               <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12" />
             </svg>
           } />
-          <span className="text-xs text-slate-400 font-mono tabular-nums">
-            {form.description.length} car.
-          </span>
         </div>
+
+        <label className="block text-xs font-semibold text-slate-500 mb-1.5">
+          Description courte
+          <span className="ml-2 font-mono tabular-nums text-slate-400">{form.description.length} car.</span>
+        </label>
         <textarea
           value={form.description}
           onChange={setField("description")}
-          rows={5}
-          placeholder="Description détaillée du produit..."
+          rows={3}
+          placeholder="Résumé affiché dans les listes et vignettes..."
+          className="input resize-y w-full"
+        />
+
+        <label className="block text-xs font-semibold text-slate-500 mt-5 mb-1.5">
+          Description détaillée
+          <span className="ml-2 font-mono tabular-nums text-slate-400">{form.descriptionLong.length} car.</span>
+        </label>
+        <textarea
+          value={form.descriptionLong}
+          onChange={setField("descriptionLong")}
+          rows={7}
+          placeholder="Description complète de la fiche produit (HTML accepté)..."
           className="input resize-y w-full"
         />
       </div>
