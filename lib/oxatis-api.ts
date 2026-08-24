@@ -239,6 +239,15 @@ export async function getProductDetailBySKU(
   return callOxatis({ appId, token, method: "ProductGet", data });
 }
 
+// Oxatis marque les descriptions longues éditées en HTML par ce commentaire de tête ;
+// sans lui le contenu peut être rendu comme du texte brut. Ajout idempotent.
+const WYSIWYG_MARKER = "<!--#WYSIWYG#-->";
+function withWysiwygMarker(html: string): string {
+  // Une description vide doit rester vide : elle sert à effacer le champ.
+  if (!html.trim()) return html;
+  return html.startsWith(WYSIWYG_MARKER) ? html : WYSIWYG_MARKER + html;
+}
+
 // Met à jour la description longue d'un produit
 export async function updateProductDescription(
   appId: string,
@@ -246,7 +255,7 @@ export async function updateProductDescription(
   itemSKU: string,
   descriptionLong: string
 ): Promise<string> {
-  const data = `<?xml version="1.0" encoding="utf-8"?><Product ${XML_NS}><ItemSKU>${escapeXml(itemSKU)}</ItemSKU><LongDescription>${escapeXml(descriptionLong)}</LongDescription><Language>fr</Language></Product>`;
+  const data = `<?xml version="1.0" encoding="utf-8"?><Product ${XML_NS}><ItemSKU>${escapeXml(itemSKU)}</ItemSKU><LongDescription>${escapeXml(withWysiwygMarker(descriptionLong))}</LongDescription><Language>fr</Language></Product>`;
   return callOxatis({ appId, token, method: "ProductUpdate", data });
 }
 
@@ -325,7 +334,8 @@ export interface ProductCreateData {
   priceHT?: number;     // Prix hors taxe
   tva?: number;         // Taux TVA en % (ex: 20 pour 20%)
   stock?: number;       // Quantité initiale en stock
-  description?: string; // Description courte
+  description?: string; // Description courte (4 ko max)
+  descriptionLong?: string; // Description détaillée / longue (16 ko max)
   brand?: string;       // Marque / éditeur
   ean?: string;         // Code-barres EAN
   weight?: number;      // Poids en kg
@@ -384,10 +394,16 @@ export async function createProduct(
   token: string,
   product: ProductCreateData
 ): Promise<string> {
+  // Les éléments suivent l'ordre de la séquence <Product> du schéma OWS
+  // (ItemSKU, ProductLanguage, Name, Description, Price, TaxRate, LongDescription,
+  //  Brand, QuantityInStock, Weight, EANCode).
   let xml = `<?xml version="1.0" encoding="utf-8"?><Product ${XML_NS}>`;
   xml += `<ItemSKU>${escapeXml(product.itemSKU)}</ItemSKU>`;
-  xml += `<Name>${escapeXml(product.name)}</Name>`;
   xml += `<ProductLanguage>fr</ProductLanguage>`;
+  xml += `<Name>${escapeXml(product.name)}</Name>`;
+  if (product.description?.trim()) {
+    xml += `<Description>${escapeXml(product.description)}</Description>`;
+  }
   if (product.priceHT !== undefined) {
     // Price est un type complexe : <Value> (float) + <VATIncluded> (bool, false = HT)
     xml += `<Price><Value>${product.priceHT.toFixed(2)}</Value><VATIncluded>false</VATIncluded></Price>`;
@@ -396,22 +412,23 @@ export async function createProduct(
     // Le champ s'appelle TaxRate (pas TVARate)
     xml += `<TaxRate>${product.tva}</TaxRate>`;
   }
-  if (product.stock !== undefined) {
-    xml += `<QuantityInStock><Value>${product.stock}</Value><Append>false</Append></QuantityInStock>`;
-  }
-  if (product.description?.trim()) {
-    xml += `<Description>${escapeXml(product.description)}</Description>`;
+  if (product.descriptionLong?.trim()) {
+    // Champ distinct de <Description> : c'est la description détaillée (HTML) de la fiche
+    xml += `<LongDescription>${escapeXml(withWysiwygMarker(product.descriptionLong))}</LongDescription>`;
   }
   if (product.brand?.trim()) {
     // Brand est un type complexe : OxID=0 + Name crée ou trouve la marque automatiquement
     xml += `<Brand><OxID>0</OxID><Name>${escapeXml(product.brand)}</Name></Brand>`;
   }
-  if (product.ean?.trim()) {
-    // Le champ s'appelle EANCode (pas EAN)
-    xml += `<EANCode>${escapeXml(product.ean)}</EANCode>`;
+  if (product.stock !== undefined) {
+    xml += `<QuantityInStock><Value>${product.stock}</Value><Append>false</Append></QuantityInStock>`;
   }
   if (product.weight && product.weight > 0) {
     xml += `<Weight>${product.weight}</Weight>`;
+  }
+  if (product.ean?.trim()) {
+    // Le champ s'appelle EANCode (pas EAN)
+    xml += `<EANCode>${escapeXml(product.ean)}</EANCode>`;
   }
   xml += `</Product>`;
 
