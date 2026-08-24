@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
 
     // Normalise les champs numériques : une chaîne mal typée ferait planter
     // `.toFixed()` ou serait interpolée telle quelle dans le XML.
-    for (const field of ["priceHT", "tva", "stock", "weight"] as const) {
+    for (const field of ["priceHT", "priceTTC", "tva", "stock", "weight"] as const) {
       if (product[field] != null) {
         const n = toFiniteNumber(product[field]);
         if (n === null) return badRequest(`Le champ product.${field} doit être un nombre`);

@@ -331,7 +331,8 @@ export interface ProductFeature {
 export interface ProductCreateData {
   itemSKU: string;      // Référence unique (obligatoire)
   name: string;         // Titre du produit (obligatoire)
-  priceHT?: number;     // Prix hors taxe
+  priceHT?: number;     // Prix hors taxe (exclusif avec priceTTC)
+  priceTTC?: number;    // Prix TVA incluse — envoyé tel quel, Oxatis en déduit le HT
   tva?: number;         // Taux TVA en % (ex: 20 pour 20%)
   stock?: number;       // Quantité initiale en stock
   description?: string; // Description courte (4 ko max)
@@ -339,6 +340,7 @@ export interface ProductCreateData {
   brand?: string;       // Marque / éditeur
   ean?: string;         // Code-barres EAN
   weight?: number;      // Poids en kg
+  dateOfAvailability?: string; // Date de disponibilité au format YYYY-MM-DD
   features?: ProductFeature[]; // Caractéristiques — incluses dans ProductV2Add
   // Note: les images ne peuvent pas être assignées lors de la création via ProductV2Add.
   // Elles doivent être gérées séparément (galerie Oxatis).
@@ -396,7 +398,7 @@ export async function createProduct(
 ): Promise<string> {
   // Les éléments suivent l'ordre de la séquence <Product> du schéma OWS
   // (ItemSKU, ProductLanguage, Name, Description, Price, TaxRate, LongDescription,
-  //  Brand, QuantityInStock, Weight, EANCode).
+  //  Brand, QuantityInStock, Weight, EANCode, DateOfAvailability).
   let xml = `<?xml version="1.0" encoding="utf-8"?><Product ${XML_NS}>`;
   xml += `<ItemSKU>${escapeXml(product.itemSKU)}</ItemSKU>`;
   xml += `<ProductLanguage>fr</ProductLanguage>`;
@@ -404,8 +406,12 @@ export async function createProduct(
   if (product.description?.trim()) {
     xml += `<Description>${escapeXml(product.description)}</Description>`;
   }
-  if (product.priceHT !== undefined) {
-    // Price est un type complexe : <Value> (float) + <VATIncluded> (bool, false = HT)
+  // Price est un type complexe : <Value> (float) + <VATIncluded> (bool).
+  // Un prix TTC est transmis tel quel avec VATIncluded=true : le convertir en HT
+  // ici introduirait un arrondi et imposerait notre taux plutôt que celui du compte.
+  if (product.priceTTC !== undefined) {
+    xml += `<Price><Value>${product.priceTTC.toFixed(2)}</Value><VATIncluded>true</VATIncluded></Price>`;
+  } else if (product.priceHT !== undefined) {
     xml += `<Price><Value>${product.priceHT.toFixed(2)}</Value><VATIncluded>false</VATIncluded></Price>`;
   }
   if (product.tva !== undefined) {
@@ -429,6 +435,11 @@ export async function createProduct(
   if (product.ean?.trim()) {
     // Le champ s'appelle EANCode (pas EAN)
     xml += `<EANCode>${escapeXml(product.ean)}</EANCode>`;
+  }
+  // Même format strict que updateProductAvailability : toute autre valeur est ignorée
+  // (à la création, omettre la balise laisse simplement le produit sans date).
+  if (product.dateOfAvailability && /^\d{4}-\d{2}-\d{2}$/.test(product.dateOfAvailability)) {
+    xml += `<DateOfAvailability>${product.dateOfAvailability}T00:00:00</DateOfAvailability>`;
   }
   xml += `</Product>`;
 

@@ -13,10 +13,11 @@ interface CategoryEntry {
   slot: number; // slot Oxatis réel (1, 2, 3, 4, 10…) déduit du nom de la colonne
 }
 
-interface CsvImportRow {
+export interface CsvImportRow {
   itemSKU: string;
   name: string;
-  priceHT: string;
+  price: string;
+  priceIncludesVAT: boolean;
   tva: string;
   ean: string;
   brand: string;
@@ -24,6 +25,8 @@ interface CsvImportRow {
   description: string;
   descriptionLong: string;
   characteristics: string;
+  dateOfAvailability: string; // normalisée YYYY-MM-DD, "" si absente ou illisible
+  dateOfAvailabilityRaw: string;
   categoryEntries: CategoryEntry[];
   valid: boolean;
   errors: string[];
@@ -34,7 +37,7 @@ interface CategoryColDef {
   slot: number;
 }
 
-interface ColMap {
+export interface ColMap {
   [key: string]: number | boolean | CategoryColDef[] | undefined;
   priceIsTTC?: boolean;
   categoryNameCols?: CategoryColDef[];
@@ -76,15 +79,18 @@ function slotFromNormalizedHeader(c: string): number {
   return 0;
 }
 
-function detectColumns(headers: string[]): ColMap {
+export function detectColumns(headers: string[]): ColMap {
   const m: ColMap = { categoryNameCols: [] };
   headers.forEach((h, i) => {
     const c = normalizeHeader(h);
-    if (["ref", "reference", "sku", "itemsku", "id", "produit", "code", "codeproduit", "mpn"].includes(c))
-      m.itemSKU = i;
+    // Premier match gagnant : un export Oxatis contient « Code produit » et « MPN »,
+    // et c'est le code produit (colonne de gauche) qui fait la référence.
+    if (["ref", "reference", "sku", "itemsku", "id", "produit", "code", "codeproduit", "mpn"].includes(c)) {
+      if (m.itemSKU === undefined) m.itemSKU = i;
+    }
     else if (["titre", "title", "nom", "name", "libelle"].includes(c)) m.name = i;
-    else if (["prix", "price", "prixht", "priceht", "ht", "montant"].includes(c)) m.priceHT = i;
-    else if (["prix1ttc", "prixttc", "ttc"].includes(c)) { m.priceHT = i; m.priceIsTTC = true; }
+    else if (["prix", "price", "prixht", "priceht", "ht", "montant"].includes(c)) m.price = i;
+    else if (["prix1ttc", "prixttc", "ttc"].includes(c)) { m.price = i; m.priceIsTTC = true; }
     else if (["tva", "vat", "taxe", "tx", "taux", "tauxdetvaenvaleur", "tauxdetvaeenvaleur"].includes(c)) m.tva = i;
     else if (["ean", "barcode", "gtin", "codeean", "codebarre", "codebarres"].includes(c)) m.ean = i;
     else if (["marque", "brand", "fabricant", "manufacturer", "editeur"].includes(c)) m.brand = i;
@@ -92,6 +98,10 @@ function detectColumns(headers: string[]): ColMap {
     else if (["descriptiondetaillee", "descriptiondetail", "detaillee", "descriptionlongue", "longdescription"].includes(c)) m.descriptionDetail = i;
     else if (["description", "desc", "details", "detail"].includes(c)) m.description = i;
     else if (["caracteristiques", "caracteristique", "features", "feature", "attributs"].includes(c)) m.characteristics = i;
+    // « Date de disponibilité » (colonne Oxatis) prime sur « Date de sortie », qui
+    // sert de repli quand l'export ne contient que celle-ci.
+    else if (["datededisponibilite", "datedispo", "disponibilite", "dateofavailability"].includes(c)) m.dateAvailability = i;
+    else if (["datedesortie", "datesortie", "sortie", "releasedate"].includes(c)) m.dateRelease = i;
     // Colonnes catégories Oxatis : "Nom de la Xème catégorie" — on déduit le slot du nom
     else if (c.includes("categorie") && c.startsWith("nom")) {
       const slot = slotFromNormalizedHeader(c);
@@ -101,6 +111,24 @@ function detectColumns(headers: string[]): ColMap {
     }
   });
   return m;
+}
+
+// Normalise une date d'export vers YYYY-MM-DD. Rend "" si le format est inconnu :
+// l'appelant transforme ce cas en erreur de ligne plutôt que d'ignorer la valeur.
+function toIsoDate(raw: string): string {
+  const v = raw.trim();
+  if (!v) return "";
+  const iso = v.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ]|$)/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const fr = v.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/);
+  if (fr) {
+    const [, d, mo, y] = fr;
+    const day = d.padStart(2, "0");
+    const month = mo.padStart(2, "0");
+    if (Number(day) < 1 || Number(day) > 31 || Number(month) < 1 || Number(month) > 12) return "";
+    return `${y}-${month}-${day}`;
+  }
+  return "";
 }
 
 function parseCharacteristics(raw: string): { name: string; value: string }[] {
@@ -129,16 +157,18 @@ function validateRow(row: CsvImportRow): CsvImportRow {
   const errors: string[] = [];
   if (!row.itemSKU.trim()) errors.push("Référence manquante");
   if (!row.name.trim()) errors.push("Titre manquant");
-  if (!row.priceHT.trim()) errors.push("Prix manquant");
+  if (!row.price.trim()) errors.push("Prix manquant");
   else {
-    const p = parseFloat(row.priceHT.replace(",", "."));
+    const p = parseFloat(row.price.replace(",", "."));
     if (isNaN(p) || p < 0) errors.push("Prix invalide");
   }
   if (row.ean && !/^\d{8,14}$/.test(row.ean.trim())) errors.push("EAN invalide");
+  if (row.dateOfAvailabilityRaw && !row.dateOfAvailability)
+    errors.push(`Date de disponibilité illisible : ${row.dateOfAvailabilityRaw}`);
   return { ...row, valid: errors.length === 0, errors };
 }
 
-function buildRows(rawRows: string[][], colMap: ColMap): CsvImportRow[] {
+export function buildRows(rawRows: string[][], colMap: ColMap): CsvImportRow[] {
   const getIdx = (key: string): number | undefined => {
     const v = colMap[key];
     return typeof v === "number" ? v : undefined;
@@ -153,15 +183,10 @@ function buildRows(rawRows: string[][], colMap: ColMap): CsvImportRow[] {
 
   return rawRows.map((row) => {
     const tvaStr = get(row, "tva") || "20";
-    let priceStr = get(row, "priceHT");
-
-    if (colMap.priceIsTTC && priceStr) {
-      const ttc = parseFloat(priceStr.replace(",", "."));
-      const tva = parseFloat(tvaStr.replace(",", "."));
-      if (!isNaN(ttc) && !isNaN(tva)) {
-        priceStr = (ttc / (1 + tva / 100)).toFixed(2);
-      }
-    }
+    // Le prix TTC n'est plus converti en HT : il part tel quel avec VATIncluded=true.
+    // La division introduisait un arrondi et écrasait le prix de vente voulu.
+    const priceStr = get(row, "price");
+    const dateRaw = get(row, "dateAvailability") || get(row, "dateRelease");
 
     const catColDefs = (colMap.categoryNameCols as CategoryColDef[]) ?? [];
     const categoryEntries: CategoryEntry[] = catColDefs
@@ -174,7 +199,8 @@ function buildRows(rawRows: string[][], colMap: ColMap): CsvImportRow[] {
     return validateRow({
       itemSKU: get(row, "itemSKU"),
       name: get(row, "name"),
-      priceHT: priceStr,
+      price: priceStr,
+      priceIncludesVAT: colMap.priceIsTTC === true,
       tva: tvaStr,
       ean: get(row, "ean"),
       brand: get(row, "brand"),
@@ -182,6 +208,8 @@ function buildRows(rawRows: string[][], colMap: ColMap): CsvImportRow[] {
       description: get(row, "description"),
       descriptionLong: get(row, "descriptionDetail"),
       characteristics: get(row, "characteristics"),
+      dateOfAvailability: toIsoDate(dateRaw),
+      dateOfAvailabilityRaw: dateRaw,
       categoryEntries,
       valid: false,
       errors: [],
@@ -261,7 +289,7 @@ export default function CsvImportMode({
     const headers = rawRows[0].map((h) => String(h ?? "").replace(/"/g, "").trim());
     const colMap = detectColumns(headers);
 
-    if (colMap.itemSKU === undefined || colMap.name === undefined || colMap.priceHT === undefined) {
+    if (colMap.itemSKU === undefined || colMap.name === undefined || colMap.price === undefined) {
       setCsvError(
         `Colonnes obligatoires introuvables.\n` +
         `Colonnes détectées : ${headers.join(", ")}\n` +
@@ -403,13 +431,16 @@ export default function CsvImportMode({
             product: {
               itemSKU: row.itemSKU,
               name: row.name,
-              priceHT: parseFloat(row.priceHT.replace(",", ".")),
+              ...(row.priceIncludesVAT
+                ? { priceTTC: parseFloat(row.price.replace(",", ".")) }
+                : { priceHT: parseFloat(row.price.replace(",", ".")) }),
               tva: parseFloat(row.tva) || 20,
               stock: parseInt(row.stock) || 0,
               brand: row.brand || undefined,
               ean: row.ean || undefined,
               description: row.description || undefined,
               descriptionLong: row.descriptionLong || undefined,
+              dateOfAvailability: row.dateOfAvailability || undefined,
               features: features?.length ? features : undefined,
               categories: categories?.length ? categories : undefined,
             },
@@ -469,7 +500,7 @@ export default function CsvImportMode({
             Code EAN ; Code produit ; … ; Nom ; Prix 1 TTC ; Taux de TVA ; … ; Nom de la Xème catégorie ; … ; Caractéristiques ; …
           </div>
           <p className="text-xs text-slate-500 mt-1.5">
-            Prix TTC converti en HT · Catégories résolues par nom · Caractéristiques appliquées · CSV et XLSX acceptés
+            Prix TTC envoyé tel quel (TVA incluse) · Date de disponibilité reprise · Catégories résolues par nom · Caractéristiques appliquées · CSV et XLSX acceptés
           </p>
         </div>
 
@@ -575,9 +606,10 @@ export default function CsvImportMode({
                     <th className="w-8">#</th>
                     <th>Réf.</th>
                     <th>Titre</th>
-                    <th className="text-right">Prix HT</th>
+                    <th className="text-right">{csvRows[0]?.priceIncludesVAT ? "Prix TTC" : "Prix HT"}</th>
                     <th className="text-center">TVA</th>
                     <th>EAN</th>
+                    <th>Date dispo.</th>
                     <th>Catégories</th>
                     <th>Caractéristiques</th>
                     <th className="text-center w-8">Statut</th>
@@ -600,10 +632,17 @@ export default function CsvImportMode({
                           {row.name || <span className="text-red-400 italic">manquant</span>}
                         </td>
                         <td className="text-right font-mono text-xs">
-                          {row.priceHT ? `${row.priceHT} €` : <span className="text-red-400 italic">manquant</span>}
+                          {row.price ? `${row.price} €` : <span className="text-red-400 italic">manquant</span>}
                         </td>
                         <td className="text-center text-slate-500">{row.tva}%</td>
                         <td className="font-mono text-xs text-slate-500">{row.ean || "—"}</td>
+                        <td className="font-mono text-xs text-slate-500">
+                          {row.dateOfAvailability || (
+                            row.dateOfAvailabilityRaw
+                              ? <span className="text-red-400 italic">illisible</span>
+                              : <span className="text-slate-300">—</span>
+                          )}
+                        </td>
                         <td className="text-xs text-slate-500 max-w-[120px]">
                           {row.categoryEntries.length > 0 ? (
                             <div className="flex flex-wrap gap-1">

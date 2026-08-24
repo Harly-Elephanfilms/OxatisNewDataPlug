@@ -73,6 +73,26 @@ describe("createProduct — XML envoyé", () => {
     expect(xml).not.toContain("<LongDescription>");
   });
 
+  it("envoie un prix TTC tel quel avec VATIncluded=true", async () => {
+    const xml = await capturePayload({ itemSKU: "655639", name: "Produit", priceTTC: 16.99, tva: 20 });
+    expect(xml).toContain("<Price><Value>16.99</Value><VATIncluded>true</VATIncluded></Price>");
+  });
+
+  it("envoie un prix HT avec VATIncluded=false", async () => {
+    const xml = await capturePayload({ itemSKU: "655639", name: "Produit", priceHT: 14.16, tva: 20 });
+    expect(xml).toContain("<Price><Value>14.16</Value><VATIncluded>false</VATIncluded></Price>");
+  });
+
+  it("envoie la date de disponibilité en datetime", async () => {
+    const xml = await capturePayload({ itemSKU: "655639", name: "Produit", dateOfAvailability: "2027-12-07" });
+    expect(xml).toContain("<DateOfAvailability>2027-12-07T00:00:00</DateOfAvailability>");
+  });
+
+  it("ignore une date de disponibilité mal formée plutôt que de l'envoyer", async () => {
+    const xml = await capturePayload({ itemSKU: "655639", name: "Produit", dateOfAvailability: "07/12/2027" });
+    expect(xml).not.toContain("<DateOfAvailability>");
+  });
+
   it("respecte l'ordre de la séquence <Product> du schéma OWS", async () => {
     const xml = await capturePayload({
       itemSKU: "REF1",
