@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
-import type { StockItem, CsvStockItem, ComparisonItem } from "@/lib/types";
+import type { StockItem, CsvStockItem, ComparisonItem, Article } from "@/lib/types";
 import { useCredentials } from "@/app/contexts/CredentialsContext";
+import { isFutureDate } from "@/lib/dates";
 import StockImport from "@/app/components/features/stock/StockImport";
 import StockComparisonTable from "@/app/components/features/stock/StockComparisonTable";
+import ReleaseCategoryPanel from "@/app/components/features/stock/ReleaseCategoryPanel";
 
 type Tab = "config" | "import" | "comparison";
 type SortField = "itemSKU" | "name" | "currentStock" | "newStock" | "difference";
@@ -15,21 +17,6 @@ function adjustNewStock(stock: number): number {
   if (adjusted <= -5) return 0;
   if (adjusted <= 0) return 1;
   return adjusted;
-}
-
-function isFutureDate(dateStr: string): boolean {
-  if (!dateStr) return false;
-  let date: Date;
-  const parts = dateStr.split("/");
-  if (parts.length === 3) {
-    date = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
-  } else {
-    date = new Date(dateStr);
-  }
-  if (isNaN(date.getTime())) return false;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return date > today;
 }
 
 export default function StockPage() {
@@ -60,6 +47,9 @@ export default function StockPage() {
   const [loadingSiteStock, setLoadingSiteStock] = useState(false);
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
   const [itemsToSend, setItemsToSend] = useState<ComparisonItem[]>([]);
+  // Catalogue complet : porte les catégories que le flux stock n'a pas.
+  const [articles, setArticles] = useState<Article[]>([]);
+  const [loadingArticles, setLoadingArticles] = useState(false);
 
   const [localAppId, setLocalAppId] = useState("");
   const [localToken, setLocalToken] = useState("");
@@ -68,6 +58,20 @@ export default function StockPage() {
   const { setCredentials } = useCredentials();
 
   const effectiveHasCredentials = serverHasCredentials || hasCredentials;
+
+  const loadArticles = useCallback(async () => {
+    setLoadingArticles(true);
+    try {
+      const res = await fetch("/api/oxatis/fetch-articles");
+      const data = await res.json() as { items?: Article[]; error?: string };
+      if (!res.ok || !data.items) throw new Error(data.error || "Erreur chargement du catalogue");
+      setArticles(data.items);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erreur inconnue");
+    } finally {
+      setLoadingArticles(false);
+    }
+  }, []);
 
   const fetchSiteStockFromUrl = async () => {
     setLoadingSiteStock(true);
@@ -85,6 +89,7 @@ export default function StockPage() {
       }));
       setSiteStock(items);
       setSiteFileName(`elephantfilms.com (${new Date().toLocaleDateString("fr-FR")})`);
+      loadArticles();
       setSuccess(`${items.length} produits récupérés depuis elephantfilms.com`);
       setTimeout(() => setSuccess(""), 5000);
     } catch (err) {
@@ -100,6 +105,7 @@ export default function StockPage() {
       const stockItems = items as StockItem[];
       setSiteStock(stockItems);
       setSiteFileName("fichier importé");
+      loadArticles();
       setSuccess(`${stockItems.length} produits importés (stock site)`);
       setTimeout(() => setSuccess(""), 5000);
     } else if (format === "export") {
@@ -109,7 +115,7 @@ export default function StockPage() {
       setSuccess(`${csvItems.length} produits importés (nouveau stock)`);
       setTimeout(() => setSuccess(""), 5000);
     }
-  }, []);
+  }, [loadArticles]);
 
   const comparison = useMemo((): ComparisonItem[] => {
     if (siteStock.length === 0 && newStock.length === 0) return [];
@@ -347,6 +353,20 @@ export default function StockPage() {
 
         {/* Comparison Tab */}
         {tab === "comparison" && (
+          <>
+          <ReleaseCategoryPanel
+            siteStock={siteStock}
+            articles={articles}
+            loadingArticles={loadingArticles}
+            onRefreshArticles={loadArticles}
+            onArticlesChange={setArticles}
+            serverHasCredentials={serverHasCredentials}
+            hasCredentials={hasCredentials}
+            appId={appId}
+            token={token}
+            onError={setError}
+            onSuccess={setSuccess}
+          />
           <StockComparisonTable
             items={comparison}
             sortField={sortField}
@@ -364,6 +384,7 @@ export default function StockPage() {
             onGoToImport={() => setTab("import")}
             updating={updating}
           />
+          </>
         )}
 
         {/* Config Tab */}
