@@ -13,8 +13,8 @@ type SortField = "itemSKU" | "name" | "currentStock" | "newStock" | "difference"
 type SortDir = "asc" | "desc";
 
 function adjustNewStock(stock: number): number {
-  const adjusted = stock - 5;
-  if (adjusted <= -5) return 0;
+  const adjusted = stock - 10;
+  if (adjusted <= -10) return 0;
   if (adjusted <= 0) return 1;
   return adjusted;
 }
