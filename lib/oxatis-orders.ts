@@ -35,31 +35,37 @@ export interface SalesAnalysis {
   promoCodes: Array<{ code: string; usageCount: number; totalDiscount: number }>;
 }
 
-async function callOrderApi(
+export async function callOrderApi(
   appId: string,
   token: string,
   method: string,
-  data: string
+  data: string,
+  options: { url?: string; signal?: AbortSignal } = {}
 ): Promise<string> {
   const body = `AppId=${encodeURIComponent(appId)}&Token=${encodeURIComponent(token)}&Method=${encodeURIComponent(method)}&Data=${encodeURIComponent(data)}`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30_000);
   let response: Response;
   try {
-    response = await fetch(ORDER_SERVICES_URL, {
+    response = await fetch(options.url ?? ORDER_SERVICES_URL, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body,
-      signal: controller.signal,
+      cache: "no-store",
+      signal: options.signal
+        ? AbortSignal.any([controller.signal, options.signal])
+        : controller.signal,
     });
+    if (!response.ok) throw new Error(`HTTP ${response.status} — méthode : ${method}`);
+    return await response.text();
   } catch (err) {
+    if (options.signal?.aborted) throw err;
+    if (err instanceof Error && err.message.startsWith("HTTP ")) throw err;
     const isTimeout = err instanceof Error && err.name === "AbortError";
     throw new Error(isTimeout ? `Timeout — méthode : ${method}` : `Erreur réseau — méthode : ${method}`);
   } finally {
     clearTimeout(timeout);
   }
-  if (!response.ok) throw new Error(`HTTP ${response.status} — méthode : ${method}`);
-  return response.text();
 }
 
 export function parseOrderCount(xml: string): number {
