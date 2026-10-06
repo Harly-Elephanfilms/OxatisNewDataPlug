@@ -57,6 +57,15 @@ const navItems: NavItem[] = [
     ),
   },
   {
+    href: "/orders",
+    label: "Commandes",
+    icon: (
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5h6m-6 7h6m-6 4h6M6 3h12v18H6V3z" />
+      </svg>
+    ),
+  },
+  {
     href: "/analytics",
     label: "Data Analyse",
     icon: (
@@ -78,16 +87,12 @@ const navItems: NavItem[] = [
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const [open, setOpen] = useState(false);
-
-  // Close drawer on route change
-  useEffect(() => {
-    setOpen(false);
-  }, [pathname]);
+  const [openPath, setOpenPath] = useState<string | null>(null);
+  const open = openPath === pathname;
 
   // Close on Escape key
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpenPath(null); };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, []);
@@ -105,7 +110,7 @@ export default function Sidebar() {
       <header className="app-topbar">
         {/* Burger */}
         <button
-          onClick={() => setOpen(true)}
+          onClick={() => setOpenPath(pathname)}
           className="topbar-burger"
           aria-label="Ouvrir le menu"
         >
@@ -127,6 +132,23 @@ export default function Sidebar() {
           </div>
         </div>
 
+        <nav className="topbar-nav" aria-label="Navigation rapide">
+          {navItems.filter((item) => item.href !== "/aide" && item.href !== "/create").map((item) => {
+            const active = isActive(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`topbar-nav-link${active ? " topbar-nav-link-active" : ""}`}
+                aria-current={active ? "page" : undefined}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+          <Link href="/aide" className="topbar-nav-help">Aide</Link>
+        </nav>
+
         {/* Current page breadcrumb */}
         {currentPage && (
           <div className="topbar-page">
@@ -140,7 +162,7 @@ export default function Sidebar() {
       {open && (
         <div
           className="nav-overlay"
-          onClick={() => setOpen(false)}
+          onClick={() => setOpenPath(null)}
           aria-hidden="true"
         />
       )}
@@ -161,7 +183,7 @@ export default function Sidebar() {
             </div>
           </div>
           <button
-            onClick={() => setOpen(false)}
+            onClick={() => setOpenPath(null)}
             className="drawer-close"
             aria-label="Fermer le menu"
           >
@@ -181,38 +203,16 @@ export default function Sidebar() {
                 <li key={item.href}>
                   <Link
                     href={item.href}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.625rem",
-                      padding: "0.625rem 0.75rem",
-                      borderRadius: "0.5rem",
-                      fontSize: "0.9rem",
-                      fontWeight: active ? 600 : 400,
-                      textDecoration: "none",
-                      color: active ? "#fff" : "#c7d2fe",
-                      background: active ? "rgba(99,102,241,0.35)" : "transparent",
-                      transition: "background 0.15s ease, color 0.15s ease",
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!active) {
-                        (e.currentTarget as HTMLAnchorElement).style.background = "rgba(255,255,255,0.06)";
-                        (e.currentTarget as HTMLAnchorElement).style.color = "#fff";
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!active) {
-                        (e.currentTarget as HTMLAnchorElement).style.background = "transparent";
-                        (e.currentTarget as HTMLAnchorElement).style.color = "#c7d2fe";
-                      }
-                    }}
+                    className={`drawer-link${active ? " drawer-link-active" : ""}`}
+                    aria-current={active ? "page" : undefined}
+                    onClick={() => setOpenPath(null)}
                   >
-                    <span style={{ color: active ? "#a5b4fc" : "#818cf8", flexShrink: 0, display: "flex" }}>
+                    <span className="drawer-link-icon">
                       {item.icon}
                     </span>
                     {item.label}
                     {active && (
-                      <span style={{ marginLeft: "auto", width: 6, height: 6, borderRadius: "50%", background: "#a5b4fc", flexShrink: 0 }} />
+                      <span className="drawer-link-dot" />
                     )}
                   </Link>
                 </li>
