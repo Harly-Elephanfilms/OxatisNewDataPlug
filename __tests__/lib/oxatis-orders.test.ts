@@ -7,6 +7,7 @@ import {
   aggregateOrders,
   getOrderDetails,
 } from "@/lib/oxatis-orders";
+import { buildOrderProgressUpdateXml } from "@/lib/order-preparation";
 
 describe("parseOrderCount", () => {
   it("retourne le nombre de commandes sur succès", () => {
@@ -126,12 +127,16 @@ describe("getOrderDetails — orderId validation", () => {
     );
   });
 
-  it("does not throw on a purely numeric orderId (network call is expected to fail)", async () => {
-    // A valid numeric orderId passes the guard; the subsequent fetch will fail
-    // in the test environment — we only care that it does NOT throw our guard error.
-    await expect(getOrderDetails("app", "tok", "12345")).rejects.not.toThrow(
-      "Invalid orderId: 12345"
+  it("passes a purely numeric orderId to the Oxatis API", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("<StatusCode>503</StatusCode>", { status: 200 })
     );
+    try {
+      await expect(getOrderDetails("app", "tok", "12345")).resolves.toBeNull();
+      expect(fetchMock).toHaveBeenCalledOnce();
+    } finally {
+      fetchMock.mockRestore();
+    }
   });
 });
 
@@ -175,6 +180,19 @@ describe("aggregateOrders", () => {
     expect(result.topProducts[1].quantity).toBe(5);
   });
 
+  it("sépare les ventes article avec/sans promo et compte les commandes distinctes", () => {
+    const result = aggregateOrders(orders, "2024-03-01", "2024-03-02");
+    const product = result.allProducts.find((item) => item.sku === "SKU-A")!;
+    expect(product.quantity).toBe(5);
+    expect(product.orderCount).toBe(2);
+    expect(product.promoQuantity).toBe(3);
+    expect(product.noPromoQuantity).toBe(2);
+    expect(product.promoRevenue).toBe(60);
+    expect(product.noPromoRevenue).toBe(50);
+    expect(product.promoOrderCount).toBe(1);
+    expect(product.noPromoOrderCount).toBe(1);
+  });
+
   it("agrège le CA par jour", () => {
     const result = aggregateOrders(orders, "2024-03-01", "2024-03-02");
     const day1 = result.revenueByDay.find((d) => d.date === "2024-03-01");
@@ -195,7 +213,26 @@ describe("aggregateOrders", () => {
     const result = aggregateOrders([], "2024-03-01", "2024-03-02");
     expect(result.summary.totalOrders).toBe(0);
     expect(result.topProducts).toHaveLength(0);
+    expect(result.allProducts).toHaveLength(0);
     expect(result.revenueByDay).toHaveLength(0);
     expect(result.promoCodes).toHaveLength(0);
+  });
+});
+
+describe("buildOrderProgressUpdateXml", () => {
+  it("met à jour uniquement l'avancement sans publier, notifier ou facturer", () => {
+    const xml = buildOrderProgressUpdateXml("123", "45", "2026-10-15T10:00:00.000Z");
+    expect(xml).toContain("<OrderID>123</OrderID>");
+    expect(xml).toContain("<ProgressStateID>45</ProgressStateID>");
+    expect(xml).toContain("<UpdateOrderProgressState>true</UpdateOrderProgressState>");
+    expect(xml).toContain("<SendEmail>false</SendEmail>");
+    expect(xml).toContain("<SendSMS>false</SendSMS>");
+    expect(xml).toContain("<CreateInvoice>false</CreateInvoice>");
+    expect(xml).toContain("<Publish>false</Publish>");
+  });
+
+  it("refuse les identifiants non numériques", () => {
+    expect(() => buildOrderProgressUpdateXml("1</OrderID>", "2")).toThrow("invalide");
+    expect(() => buildOrderProgressUpdateXml("1", "0")).toThrow("invalide");
   });
 });

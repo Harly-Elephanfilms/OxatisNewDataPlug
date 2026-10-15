@@ -10,6 +10,9 @@ import { SalesSummaryCards } from "./components/SalesSummaryCards";
 import { TopProductsChart } from "./components/TopProductsChart";
 import { RevenueChart } from "./components/RevenueChart";
 import { PromoCodeTable } from "./components/PromoCodeTable";
+import { ExportSalesButton } from "./components/ExportSalesButton";
+import { TrafficAnalytics } from "./components/TrafficAnalytics";
+import { ProductSalesBreakdown } from "./components/ProductSalesBreakdown";
 
 interface StatCard {
   label: string;
@@ -28,7 +31,7 @@ export default function AnalyticsPage() {
   const [selectedBrand, setSelectedBrand] = useState<string | null>(null);
   const [brandSort, setBrandSort] = useState<BrandSort>("count");
   const [brandSearch, setBrandSearch] = useState("");
-  const [activeTab, setActiveTab] = useState<"catalogue" | "ventes">("catalogue");
+  const [activeTab, setActiveTab] = useState<"catalogue" | "ventes" | "trafic">("catalogue");
   const { serverHasCredentials } = useCredentials();
   const { status, progress, result, truncated, error: salesError, analyze } = useSalesAnalysis();
 
@@ -149,7 +152,7 @@ export default function AnalyticsPage() {
             </div>
             <div>
               <h1 style={{ fontSize: "1.75rem", fontWeight: 800, color: "#fff", letterSpacing: "-0.03em", lineHeight: 1.2, margin: 0 }}>Data Analyse</h1>
-              <p style={{ fontSize: "0.875rem", color: "#a5b4fc", margin: "0.2rem 0 0" }}>Statistiques et performances du catalogue</p>
+              <p style={{ fontSize: "0.875rem", color: "#a5b4fc", margin: "0.2rem 0 0" }}>Catalogue, ventes et trafic du site</p>
             </div>
           </div>
           {activeTab === "catalogue" && (
@@ -173,6 +176,7 @@ export default function AnalyticsPage() {
           {[
             { id: "catalogue" as const, label: "Catalogue" },
             { id: "ventes" as const, label: "Ventes" },
+            { id: "trafic" as const, label: "Trafic GA4" },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -450,12 +454,19 @@ export default function AnalyticsPage() {
             {/* Résultats */}
             {status === "done" && result && (
               <>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap", marginBottom: "1rem" }}>
+                  <p style={{ margin: 0, color: "#64748b", fontSize: "0.875rem" }}>
+                    Résultats du {result.period.from} au {result.period.to}
+                  </p>
+                  <ExportSalesButton result={result} />
+                </div>
                 <SalesSummaryCards summary={result.summary} />
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem", marginBottom: "1.5rem" }}>
                   <RevenueChart revenueByDay={result.revenueByDay} />
                   <PromoCodeTable promoCodes={result.promoCodes} />
                 </div>
                 <TopProductsChart products={result.topProducts} />
+                <ProductSalesBreakdown products={result.allProducts} />
                 {result.summary.totalOrders === 0 && (
                   <div className="card p-10 text-center" style={{ color: "#94a3b8", marginTop: "1.5rem" }}>
                     <p style={{ fontSize: "1rem", fontWeight: 500 }}>Aucune commande sur cette période.</p>
@@ -473,6 +484,8 @@ export default function AnalyticsPage() {
             )}
           </div>
         )}
+
+        {activeTab === "trafic" && <TrafficAnalytics />}
       </div>
     </div>
   );

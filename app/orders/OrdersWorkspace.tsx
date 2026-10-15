@@ -28,6 +28,11 @@ export default function OrdersWorkspace({ today }: { today: string }) {
   const [references, setReferences] = useState("");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [targetProgressStateId, setTargetProgressStateId] = useState("");
+  const [confirmProgressChange, setConfirmProgressChange] = useState(false);
+  const [updatingProgress, setUpdatingProgress] = useState(false);
+  const [progressUpdateMessage, setProgressUpdateMessage] = useState("");
+  const [progressUpdateErrors, setProgressUpdateErrors] = useState<{ orderId: string; error: string }[]>([]);
   const [displayLimit, setDisplayLimit] = useState(100);
   const [exporting, setExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState("");
@@ -64,6 +69,7 @@ export default function OrdersWorkspace({ today }: { today: string }) {
   const visible = useMemo(() => filterPreparationOrders(orders, references, search), [orders, references, search]);
   // L'export est toujours l'intersection de la sélection et du filtre affiché.
   const toExport = useMemo(() => visible.filter((order) => selected.has(order.oxId)), [visible, selected]);
+  const toProgressUpdate = useMemo(() => toExport.filter((order) => order.progressStateId !== targetProgressStateId), [toExport, targetProgressStateId]);
   const selectedLines = toExport.reduce((sum, order) => sum + order.items.length, 0);
 
   async function loadOrders() {
@@ -77,6 +83,9 @@ export default function OrdersWorkspace({ today }: { today: string }) {
     setSelected(new Set());
     setError("");
     setExportMessage("");
+    setProgressUpdateMessage("");
+    setProgressUpdateErrors([]);
+    setConfirmProgressChange(false);
     setDisplayLimit(100);
     setProgress({ scanned: 0, total: 0, page: 0, pages: 0 });
     setLoadedDescription(mode === "unbilled" ? "Payées, non facturées" : `Facturées · ${chosenState?.name ?? "État personnalisé"}`);
@@ -148,6 +157,51 @@ export default function OrdersWorkspace({ today }: { today: string }) {
     setExportMessage("");
   }
 
+  async function updateSelectedProgress() {
+    if (!targetProgressStateId || !toProgressUpdate.length || updatingProgress) return;
+    setUpdatingProgress(true);
+    setProgressUpdateMessage("");
+    setProgressUpdateErrors([]);
+    setConfirmProgressChange(false);
+    const targetName = states.find((state) => state.id === targetProgressStateId)?.name ?? targetProgressStateId;
+    const succeeded: string[] = [];
+    const failures: { orderId: string; error: string }[] = [];
+    try {
+      for (let offset = 0; offset < toProgressUpdate.length; offset += 20) {
+        const batch = toProgressUpdate.slice(offset, offset + 20);
+        const response = await fetch("/api/oxatis/orders/progress", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orderIds: batch.map((order) => order.oxId), progressStateId: targetProgressStateId }),
+        });
+        const data = await response.json() as { results?: { orderId: string; success: boolean; error?: string }[]; error?: string };
+        if (!response.ok || !data.results) {
+          failures.push(...batch.map((order) => ({ orderId: order.oxId, error: data.error || "Le lot n’a pas pu être traité." })));
+          continue;
+        }
+        for (const result of data.results) {
+          if (result.success) succeeded.push(result.orderId);
+          else failures.push({ orderId: result.orderId, error: result.error || "Mise à jour refusée par Oxatis." });
+        }
+      }
+      setOrders((current) => current
+        .map((order) => succeeded.includes(order.oxId) ? { ...order, progressStateId: targetProgressStateId } : order)
+        .filter((order) => mode !== "preorders" || !succeeded.includes(order.oxId)));
+      setSelected((current) => {
+        const next = new Set(current);
+        for (const id of succeeded) next.delete(id);
+        return next;
+      });
+      setProgressUpdateMessage(`${succeeded.length} commande(s) passée(s) à l’état « ${targetName} »${failures.length ? ` ; ${failures.length} échec(s)` : ""}.`);
+      setProgressUpdateErrors(failures);
+    } catch (err) {
+      setProgressUpdateMessage(`La mise à jour a été interrompue après ${succeeded.length} réussite(s).`);
+      setProgressUpdateErrors([...failures, { orderId: "—", error: err instanceof Error ? err.message : "Erreur réseau." }]);
+    } finally {
+      setUpdatingProgress(false);
+    }
+  }
+
   return (
     <div>
       <div className="page-header">
@@ -216,19 +270,45 @@ export default function OrdersWorkspace({ today }: { today: string }) {
           <h2 style={{ fontSize: "1.125rem", fontWeight: 700 }}>{loadedDescription} — {orders.length} commande(s)</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4" style={{ marginTop: "1rem" }}>
             <div>
-              <label className="label" htmlFor="orders-skus">Références reçues en stock</label>
+              <label className="label" htmlFor="orders-skus">Filtrer par référence article</label>
               <input id="orders-skus" className="input" placeholder="Ex. 655639, 655640" value={references} onChange={(e) => { setReferences(e.target.value); setDisplayLimit(100); setExportMessage(""); }} />
               <p style={{ color: "var(--muted)", fontSize: "0.75rem", marginTop: "0.4rem" }}>Références exactes, séparées par une virgule ou un espace. Une commande contenant l’une des références est retenue, avec tous ses articles.</p>
             </div>
             <div>
-              <label className="label" htmlFor="orders-search">Rechercher dans les commandes</label>
-              <input id="orders-search" className="input" placeholder="Numéro, client, titre…" value={search} onChange={(e) => { setSearch(e.target.value); setDisplayLimit(100); setExportMessage(""); }} />
+              <label className="label" htmlFor="orders-search">Rechercher un article ou une commande</label>
+              <input id="orders-search" className="input" placeholder="Titre, référence, numéro de commande, client…" value={search} onChange={(e) => { setSearch(e.target.value); setDisplayLimit(100); setExportMessage(""); }} />
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-3" style={{ margin: "1rem 0" }}>
             <button type="button" className="btn btn-secondary btn-sm" disabled={status !== "done" || !visible.length} onClick={() => { setSelected(new Set(visible.map((o) => o.oxId))); setExportMessage(""); }}>Tout sélectionner dans le filtre ({visible.length})</button>
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setSelected(new Set()); setExportMessage(""); }}>Tout désélectionner</button>
             <span style={{ color: "var(--muted)", fontSize: "0.8rem" }}>{toExport.length} sélectionnée(s) / {visible.length} dans le filtre</span>
+          </div>
+          <div style={{ padding: "1rem", border: "1px solid var(--border)", borderRadius: "0.75rem", background: "var(--surface, #f8fafc)" }}>
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-end">
+              <div>
+                <label className="label" htmlFor="orders-target-progress">Nouvel avancement des commandes sélectionnées</label>
+                <select id="orders-target-progress" className="input" value={targetProgressStateId} onChange={(event) => { setTargetProgressStateId(event.target.value); setConfirmProgressChange(false); setProgressUpdateMessage(""); setProgressUpdateErrors([]); }} disabled={updatingProgress || statesLoading}>
+                  <option value="">Choisir un état d’avancement</option>
+                  {states.map((state) => <option key={state.id} value={state.id}>{state.name} ({state.code})</option>)}
+                </select>
+              </div>
+              <button type="button" className="btn btn-secondary" disabled={!targetProgressStateId || !toProgressUpdate.length || updatingProgress || status !== "done"} onClick={() => setConfirmProgressChange(true)}>
+                Préparer le changement ({toProgressUpdate.length})
+              </button>
+            </div>
+            <p style={{ color: "var(--muted)", fontSize: "0.75rem", marginTop: "0.5rem" }}>Seules les commandes cochées dans le filtre actuel seront modifiées. Aucun e-mail, SMS ou facture ne sera déclenché.</p>
+            {confirmProgressChange && <div className="alert alert-warning" style={{ marginTop: "0.75rem" }} role="alert">
+              <p>Confirmez le passage de {toProgressUpdate.length} commande(s) sélectionnée(s) à « {states.find((state) => state.id === targetProgressStateId)?.name} » dans Oxatis. Cette action écrira dans les commandes.</p>
+              <details style={{ marginTop: "0.5rem" }}><summary>Vérifier les commandes concernées</summary><p>{toProgressUpdate.map((order) => order.oxId).join(", ")}</p></details>
+              <div className="flex flex-wrap gap-2" style={{ marginTop: "0.75rem" }}>
+                <button type="button" className="btn btn-primary btn-sm" onClick={() => void updateSelectedProgress()}>Confirmer le changement</button>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setConfirmProgressChange(false)}>Annuler</button>
+              </div>
+            </div>}
+            {updatingProgress && <p role="status" aria-live="polite" style={{ marginTop: "0.75rem" }}>Mise à jour des commandes Oxatis en cours…</p>}
+            {progressUpdateMessage && <div className={progressUpdateErrors.length ? "alert alert-warning" : "alert alert-success"} role="status" style={{ marginTop: "0.75rem" }}>{progressUpdateMessage}</div>}
+            {!!progressUpdateErrors.length && <details style={{ marginTop: "0.5rem" }}><summary>Voir les commandes non modifiées</summary><ul>{progressUpdateErrors.map((failure, index) => <li key={`${failure.orderId}-${index}`}>Commande {failure.orderId} : {failure.error}</li>)}</ul></details>}
           </div>
           {[
             { title: "Commandes à préparer", shipped: false, orders: visible.filter((o) => !o.shipped) },
@@ -247,17 +327,18 @@ export default function OrdersWorkspace({ today }: { today: string }) {
             </div>
             <div className="table-wrapper">
               <table className="data-table">
-                <thead><tr><th>Sélection</th><th>Commande</th><th>Date</th><th>Client / livraison</th><th>Articles de la commande complète</th><th>Montant</th></tr></thead>
+                <thead><tr><th>Sélection</th><th>Commande</th><th>Date</th><th>Avancement</th><th>Client / livraison</th><th>Articles de la commande complète</th><th>Montant</th></tr></thead>
                 <tbody>
                   {group.orders.slice(0, displayLimit).map((order) => <tr key={order.oxId}>
-                    <td><input type="checkbox" aria-label={`Exporter la commande ${order.oxId}`} checked={selected.has(order.oxId)} onChange={() => toggle(order.oxId)} disabled={status !== "done"} /></td>
+                    <td><input type="checkbox" aria-label={`Sélectionner la commande ${order.oxId}`} checked={selected.has(order.oxId)} onChange={() => toggle(order.oxId)} disabled={status !== "done" || updatingProgress} /></td>
                     <td style={{ whiteSpace: "nowrap" }}><strong>{order.oxId}</strong><p style={{ color: "var(--muted)", fontSize: "0.7rem" }}>{order.invoiceId ? `Facture ${order.invoiceId}` : "Non facturée"}</p></td>
                     <td style={{ whiteSpace: "nowrap" }}>{order.date.split("-").reverse().join("/")}</td>
+                    <td>{states.find((state) => state.id === order.progressStateId)?.name ?? (order.progressStateId || "—")}</td>
                     <td><p>{order.customer}</p><p style={{ color: "var(--muted)", fontSize: "0.75rem" }}>{order.zipCode} {order.city} · {order.country}</p><details style={{ fontSize: "0.75rem", marginTop: "0.4rem" }}><summary>Coordonnées</summary><p>{order.address}</p><p>{order.email}</p><p>{order.phone}</p></details></td>
                     <td><ul style={{ listStyle: "none", padding: 0 }}>{order.items.map((item, index) => <li key={index} style={{ marginBottom: "0.35rem" }}><strong>{item.quantity} × {item.sku}</strong> — {item.name}{item.bundled && <span style={{ color: "var(--muted)" }}> (article de pack)</span>}</li>)}</ul></td>
                     <td style={{ whiteSpace: "nowrap" }}>{order.netAmount.toFixed(2)} €</td>
                   </tr>)}
-                  {!group.orders.length && <tr><td colSpan={6} style={{ textAlign: "center", padding: "2rem" }}>{orders.length ? "Aucune commande dans ce groupe pour le filtre actuel." : "Aucune commande à préparer pour cette période."}</td></tr>}
+                  {!group.orders.length && <tr><td colSpan={7} style={{ textAlign: "center", padding: "2rem" }}>{orders.length ? "Aucune commande dans ce groupe pour le filtre actuel." : "Aucune commande à préparer pour cette période."}</td></tr>}
                 </tbody>
               </table>
             </div>

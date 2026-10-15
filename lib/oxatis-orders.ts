@@ -31,8 +31,23 @@ export interface SalesAnalysis {
     ordersWithPromo: number;
   };
   topProducts: Array<{ sku: string; name: string; quantity: number; revenue: number }>;
+  allProducts: SalesProduct[];
   revenueByDay: Array<{ date: string; revenue: number; orders: number }>;
   promoCodes: Array<{ code: string; usageCount: number; totalDiscount: number }>;
+}
+
+export interface SalesProduct {
+  sku: string;
+  name: string;
+  quantity: number;
+  revenue: number;
+  orderCount: number;
+  promoQuantity: number;
+  noPromoQuantity: number;
+  promoRevenue: number;
+  noPromoRevenue: number;
+  promoOrderCount: number;
+  noPromoOrderCount: number;
 }
 
 export async function callOrderApi(
@@ -128,7 +143,11 @@ export function aggregateOrders(
   to: string
 ): SalesAnalysis {
   let totalRevenue = 0;
-  const productMap = new Map<string, { name: string; quantity: number; revenue: number }>();
+  const productMap = new Map<string, {
+    name: string; quantity: number; revenue: number; orders: Set<string>;
+    promoQuantity: number; noPromoQuantity: number; promoRevenue: number; noPromoRevenue: number;
+    promoOrders: Set<string>; noPromoOrders: Set<string>;
+  }>();
   const dayMap = new Map<string, { revenue: number; orders: number }>();
   const promoMap = new Map<string, { usageCount: number; totalDiscount: number }>();
 
@@ -150,16 +169,39 @@ export function aggregateOrders(
     }
 
     for (const item of order.items) {
-      const p = productMap.get(item.sku) ?? { name: item.name, quantity: 0, revenue: 0 };
+      const p = productMap.get(item.sku) ?? {
+        name: item.name, quantity: 0, revenue: 0, orders: new Set<string>(),
+        promoQuantity: 0, noPromoQuantity: 0, promoRevenue: 0, noPromoRevenue: 0,
+        promoOrders: new Set<string>(), noPromoOrders: new Set<string>(),
+      };
+      const withPromo = !!order.coupon;
+      p.orders.add(order.oxId);
+      if (withPromo) p.promoOrders.add(order.oxId); else p.noPromoOrders.add(order.oxId);
       productMap.set(item.sku, {
         name: item.name || p.name,
         quantity: p.quantity + item.quantity,
         revenue: p.revenue + item.lineRevenue,
+        orders: p.orders,
+        promoQuantity: p.promoQuantity + (withPromo ? item.quantity : 0),
+        noPromoQuantity: p.noPromoQuantity + (withPromo ? 0 : item.quantity),
+        promoRevenue: p.promoRevenue + (withPromo ? item.lineRevenue : 0),
+        noPromoRevenue: p.noPromoRevenue + (withPromo ? 0 : item.lineRevenue),
+        promoOrders: p.promoOrders,
+        noPromoOrders: p.noPromoOrders,
       });
     }
   }
 
   const ordersWithPromo = orders.filter((o) => o.coupon).length;
+
+  const allProducts = Array.from(productMap.entries())
+    .map(([sku, v]) => ({
+      sku, name: v.name, quantity: v.quantity, revenue: v.revenue, orderCount: v.orders.size,
+      promoQuantity: v.promoQuantity, noPromoQuantity: v.noPromoQuantity,
+      promoRevenue: v.promoRevenue, noPromoRevenue: v.noPromoRevenue,
+      promoOrderCount: v.promoOrders.size, noPromoOrderCount: v.noPromoOrders.size,
+    }))
+    .sort((a, b) => b.quantity - a.quantity || a.sku.localeCompare(b.sku));
 
   return {
     period: { from, to },
@@ -169,10 +211,8 @@ export function aggregateOrders(
       avgOrderValue: orders.length ? totalRevenue / orders.length : 0,
       ordersWithPromo,
     },
-    topProducts: Array.from(productMap.entries())
-      .map(([sku, v]) => ({ sku, ...v }))
-      .sort((a, b) => b.quantity - a.quantity)
-      .slice(0, 10),
+    topProducts: allProducts.slice(0, 10).map(({ sku, name, quantity, revenue }) => ({ sku, name, quantity, revenue })),
+    allProducts,
     revenueByDay: Array.from(dayMap.entries())
       .map(([date, v]) => ({ date, ...v }))
       .sort((a, b) => a.date.localeCompare(b.date)),
