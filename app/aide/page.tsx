@@ -57,15 +57,6 @@ const sections: Section[] = [
     ),
   },
   {
-    id: "matrice",
-    title: "Import Matrice",
-    icon: (
-      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-      </svg>
-    ),
-  },
-  {
     id: "analytics",
     title: "Analytics",
     icon: (
@@ -184,7 +175,6 @@ export default function AidePage() {
                     { href: "/stock", label: "Gestion du stock", desc: "Comparer et mettre à jour les stocks" },
                     { href: "/articles", label: "Articles", desc: "Consulter, modifier et gérer les produits" },
                     { href: "/create", label: "Créer un article", desc: "Formulaire et import CSV" },
-                    { href: "/matrice", label: "Import Matrice", desc: "Importer depuis MatriceOxatis.xlsx" },
                     { href: "/analytics", label: "Analytics", desc: "Vue d&apos;ensemble du catalogue" },
                   ].map((link) => (
                     <Link
@@ -492,78 +482,11 @@ export default function AidePage() {
               </div>
             </section>
 
-            {/* ── Import Matrice ── */}
-            <section id="matrice" className="scroll-mt-20">
-              <div className="card p-7">
-                <h2 className="text-xl font-bold text-slate-800 mb-1 flex items-center gap-2">
-                  <span className="text-indigo-500">{sections[5].icon}</span>
-                  Import Matrice
-                </h2>
-                <p className="text-xs text-slate-400 mb-5">
-                  <Link href="/matrice" className="hover:text-indigo-600 transition-colors">/matrice</Link>
-                </p>
-
-                <div className="space-y-5">
-                  <div>
-                    <h3 className="font-semibold text-slate-700 mb-2">Fichier source</h3>
-                    <p className="text-sm text-slate-600">
-                      Importez le fichier <code className="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 text-xs">MatriceOxatis.xlsx</code> par glisser-déposer ou sélection.
-                      Le système lit la feuille <strong>Articles</strong> du classeur.
-                    </p>
-                  </div>
-
-                  <div>
-                    <h3 className="font-semibold text-slate-700 mb-2">Détection automatique</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
-                        <p className="text-sm font-semibold text-blue-700 mb-1">Nouveau article</p>
-                        <p className="text-xs text-blue-600">L&apos;OxatisId est vide ou nul dans la feuille Articles</p>
-                      </div>
-                      <div className="p-3 rounded-lg bg-green-50 border border-green-100">
-                        <p className="text-sm font-semibold text-green-700 mb-1">Article existant</p>
-                        <p className="text-xs text-green-600">L&apos;OxatisId est rempli dans la feuille Articles</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h3 className="font-semibold text-slate-700 mb-2">Fonctionnalités clés</h3>
-                    <ul className="space-y-1.5 text-sm text-slate-600">
-                      <li className="flex items-start gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 mt-2 flex-shrink-0" />
-                        Filtres : Tous / Nouveaux seulement / Existants seulement
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 mt-2 flex-shrink-0" />
-                        Avant création : vérification préalable sur Oxatis pour éviter les doublons
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 mt-2 flex-shrink-0" />
-                        Si un article existe déjà : modale de comparaison (Matrice vs Oxatis côte à côte)
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 mt-2 flex-shrink-0" />
-                        Catégorie par défaut sélectionnable — sauvegardée pour la prochaine session
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 mt-2 flex-shrink-0" />
-                        Pour les existants : mise à jour du Nom, Prix, Description, Date de disponibilité
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 mt-2 flex-shrink-0" />
-                        Progression en temps réel avec compteur et liste d&apos;erreurs
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </section>
-
             {/* ── Analytics ── */}
             <section id="analytics" className="scroll-mt-20">
               <div className="card p-7">
                 <h2 className="text-xl font-bold text-slate-800 mb-1 flex items-center gap-2">
-                  <span className="text-indigo-500">{sections[6].icon}</span>
+                  <span className="text-indigo-500">{sections[5].icon}</span>
                   Analytics
                 </h2>
                 <p className="text-xs text-slate-400 mb-5">

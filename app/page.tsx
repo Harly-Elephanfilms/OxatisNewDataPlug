@@ -41,12 +41,6 @@ const mainTools = [
 
 const otherTools = [
   {
-    href: "/matrice",
-    label: "Importer la matrice",
-    description: "Créer ou mettre à jour plusieurs fiches depuis le fichier Excel Matrice Oxatis.",
-    icon: "↥",
-  },
-  {
     href: "/create",
     label: "Créer un article",
     description: "Ajouter une nouvelle fiche produit au catalogue.",

@@ -24,6 +24,7 @@ function emptyResult(from: string, to: string): SalesAnalysis {
     period: { from, to },
     summary: { totalOrders: 0, totalRevenue: 0, avgOrderValue: 0, ordersWithPromo: 0 },
     topProducts: [],
+    allProducts: [],
     revenueByDay: [],
     promoCodes: [],
   };

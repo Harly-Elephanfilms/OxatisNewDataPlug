@@ -64,6 +64,24 @@ export async function getPreparationStates(appId: string, token: string, signal?
   return parseProgressStates(await callOrderApi(appId, token, "ProgressStateGetList", `<ProgressStateList ${XML_NS} />`, { url: PROGRESS_URL, signal }));
 }
 
+export function buildOrderProgressUpdateXml(orderId: string, progressStateId: string, date = new Date().toISOString()): string {
+  if (!/^\d+$/.test(orderId) || Number(orderId) < 1 || !/^\d+$/.test(progressStateId) || Number(progressStateId) < 1) {
+    throw new Error("Identifiant de commande ou d’avancement invalide.");
+  }
+  const safeDate = date.replace(/[<&>]/g, "");
+  // Les options de communication/facturation sont explicitement désactivées :
+  // une mise à jour d'avancement ne doit ni envoyer de message ni facturer.
+  return `<ProgressState ${XML_NS}><OrderID>${orderId}</OrderID><Date>${safeDate}</Date><ProgressStateID>${progressStateId}</ProgressStateID><Publish>false</Publish><SendEmail>false</SendEmail><SendSMS>false</SendSMS><CreateInvoice>false</CreateInvoice><UpdateOrderProgressState>true</UpdateOrderProgressState></ProgressState>`;
+}
+
+export async function updateOrderProgressState(
+  appId: string, token: string, orderId: string, progressStateId: string, signal?: AbortSignal,
+): Promise<void> {
+  const data = buildOrderProgressUpdateXml(orderId, progressStateId);
+  const xml = await callOrderApi(appId, token, "OrderUpdateTracking", data, { signal });
+  assertOrderSuccess(xml);
+}
+
 export interface OrderSummary {
   oxId: string;
   progressStateId: string;
